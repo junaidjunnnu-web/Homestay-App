@@ -17,6 +17,7 @@ export const propertiesTable = pgTable("properties", {
   locationLat: doublePrecision("location_lat"),
   locationLng: doublePrecision("location_lng"),
   nearbyAttractions: text("nearby_attractions").array().notNull().default([]),
+  phone: text("phone"),
   upiId: text("upi_id"),
   bookingMode: text("booking_mode", { enum: ["inquiry", "instant"] }).notNull().default("inquiry"),
   cancellationPolicy: text("cancellation_policy"),
