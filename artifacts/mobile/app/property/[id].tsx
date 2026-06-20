@@ -9,21 +9,32 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useGetProperty, useGetPropertyReviews } from "@workspace/api-client-react";
+import { useGetProperty, useGetPropertyReviews, useGetMenuItems } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+
+const MENU_CATS = ["All", "Breakfast", "Lunch", "Dinner", "Snacks", "Beverages"];
 
 export default function PropertyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
+  const isHost = user?.role === "host";
+
+  const [menuCat, setMenuCat] = useState("All");
 
   const { data: property, isLoading } = useGetProperty(id!);
   const { data: reviews } = useGetPropertyReviews(id!);
+  const { data: menuItems } = useGetMenuItems(
+    { propertyId: id! },
+    { query: { enabled: !!id } as any }
+  );
 
   if (isLoading) {
     return (
@@ -43,8 +54,7 @@ export default function PropertyDetailScreen() {
 
   const openMaps = () => {
     const query = encodeURIComponent(`${property.name}, ${property.city}, ${property.state}`);
-    const url = `https://www.google.com/maps/search/?api=1&query=${query}`;
-    Linking.openURL(url);
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
   };
 
   const openWhatsApp = () => {
@@ -56,14 +66,23 @@ export default function PropertyDetailScreen() {
     Linking.openURL(`tel:+91${property.host?.mobile}`);
   };
 
+  const filteredMenu = menuItems
+    ? menuItems.filter(
+        (item) =>
+          item.isAvailable &&
+          (menuCat === "All" || item.category === menuCat)
+      )
+    : [];
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Image Gallery */}
         <View style={styles.imageGallery}>
           <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
             {property.photos && property.photos.length > 0 ? (
               property.photos.map((photo, index) => (
-                <ExpoImage key={index} source={{ uri: photo }} style={styles.galleryImage} />
+                <ExpoImage key={index} source={{ uri: photo }} style={styles.galleryImage} contentFit="cover" />
               ))
             ) : (
               <LinearGradient colors={[colors.primary, colors.accent]} style={styles.galleryImage} />
@@ -75,6 +94,7 @@ export default function PropertyDetailScreen() {
         </View>
 
         <View style={styles.content}>
+          {/* Title + Rating */}
           <View style={styles.header}>
             <View style={styles.titleSection}>
               <Text style={styles.name}>{property.name}</Text>
@@ -90,25 +110,27 @@ export default function PropertyDetailScreen() {
             </View>
           </View>
 
+          {/* Action buttons */}
           <View style={styles.actionRow}>
             <Pressable style={[styles.actionBtn, { backgroundColor: "#25D366" }]} onPress={openWhatsApp}>
-              <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-              <Text style={styles.actionBtnText}>WhatsApp</Text>
+              <Ionicons name="logo-whatsapp" size={18} color="#fff" />
+              <Text style={styles.actionBtnWhite}>WhatsApp</Text>
             </Pressable>
             <Pressable style={[styles.actionBtn, { borderWidth: 1, borderColor: colors.primary }]} onPress={openCall}>
-              <Feather name="phone" size={18} color={colors.primary} />
-              <Text style={[styles.actionBtnText, { color: colors.primary }]}>Call Owner</Text>
+              <Feather name="phone" size={16} color={colors.primary} />
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>Call</Text>
             </Pressable>
             <Pressable style={[styles.actionBtn, { borderWidth: 1, borderColor: "#3B82F6" }]} onPress={openMaps}>
-              <Feather name="map" size={18} color="#3B82F6" />
-              <Text style={[styles.actionBtnText, { color: "#3B82F6" }]}>Directions</Text>
+              <Feather name="map" size={16} color="#3B82F6" />
+              <Text style={[styles.actionBtnText, { color: "#3B82F6" }]}>Map</Text>
             </Pressable>
           </View>
 
+          {/* Badges */}
           <View style={styles.badgeRow}>
             <View style={[styles.modeBadge, { backgroundColor: colors.primary + "15" }]}>
               <Text style={[styles.modeBadgeText, { color: colors.primary }]}>
-                {property.bookingMode === "instant" ? "Instant Booking" : "Inquiry Booking"}
+                {property.bookingMode === "instant" ? "⚡ Instant Booking" : "📋 Inquiry Booking"}
               </Text>
             </View>
             {property.mealsIncluded && (
@@ -119,11 +141,13 @@ export default function PropertyDetailScreen() {
             )}
           </View>
 
+          {/* About */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>About this place</Text>
             <Text style={styles.description}>{property.description}</Text>
           </View>
 
+          {/* Amenities */}
           {property.amenities && property.amenities.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Amenities</Text>
@@ -137,29 +161,115 @@ export default function PropertyDetailScreen() {
             </View>
           )}
 
+          {/* Rooms */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Available Rooms</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {isHost ? "Rooms" : "Available Rooms"}
+              </Text>
+              {isHost && (
+                <Pressable
+                  style={[styles.sectionAddBtn, { backgroundColor: colors.primary }]}
+                  onPress={() =>
+                    router.push(
+                      `/room?propertyId=${property.id}&propertyName=${encodeURIComponent(property.name)}`
+                    )
+                  }
+                >
+                  <Feather name="settings" size={13} color="#fff" />
+                  <Text style={styles.sectionAddBtnText}>Manage</Text>
+                </Pressable>
+              )}
+            </View>
+
             {property.rooms && property.rooms.length > 0 ? (
               property.rooms.map((room) => (
                 <View key={room.id} style={[styles.roomCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <View style={styles.roomInfo}>
                     <Text style={styles.roomName}>{room.name}</Text>
-                    <Text style={styles.roomType}>{room.type} • Up to {room.capacity} guests</Text>
-                    <Text style={styles.roomPrice}>₹{room.pricePerNight.toLocaleString("en-IN")} <Text style={styles.perNight}>/night</Text></Text>
+                    <Text style={styles.roomType}>{room.type} · Up to {room.capacity} guests</Text>
+                    <Text style={styles.roomPrice}>
+                      ₹{room.pricePerNight.toLocaleString("en-IN")}
+                      <Text style={styles.perNight}> /night</Text>
+                    </Text>
                   </View>
-                  <Pressable
-                    style={[styles.bookButton, { backgroundColor: colors.primary }]}
-                    onPress={() => router.push(`/booking/${room.id}`)}
-                  >
-                    <Text style={styles.bookButtonText}>Book</Text>
-                  </Pressable>
+                  {isHost ? (
+                    <Pressable
+                      style={[styles.editRoomBtn, { borderColor: colors.primary }]}
+                      onPress={() =>
+                        router.push(`/room/add?propertyId=${property.id}&roomId=${room.id}`)
+                      }
+                    >
+                      <Feather name="edit-2" size={14} color={colors.primary} />
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      style={[styles.bookButton, { backgroundColor: colors.primary }]}
+                      onPress={() => router.push(`/booking/${room.id}`)}
+                    >
+                      <Text style={styles.bookButtonText}>Book</Text>
+                    </Pressable>
+                  )}
                 </View>
               ))
             ) : (
-              <Text style={styles.emptyText}>No rooms listed yet</Text>
+              <Text style={styles.emptyText}>
+                {isHost ? "No rooms added yet. Tap Manage to add rooms." : "No rooms listed yet."}
+              </Text>
             )}
           </View>
 
+          {/* Menu Section */}
+          {menuItems && menuItems.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Menu</Text>
+              {/* Category filter */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.catList}
+              >
+                {MENU_CATS.map((cat) => (
+                  <Pressable
+                    key={cat}
+                    style={[
+                      styles.catChip,
+                      { borderColor: colors.border },
+                      menuCat === cat && { backgroundColor: colors.primary, borderColor: colors.primary },
+                    ]}
+                    onPress={() => setMenuCat(cat)}
+                  >
+                    <Text style={[styles.catText, menuCat === cat && { color: "#fff" }]}>{cat}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              {filteredMenu.length === 0 ? (
+                <Text style={styles.emptyText}>No items in this category.</Text>
+              ) : (
+                filteredMenu.map((item) => (
+                  <View
+                    key={item.id}
+                    style={[styles.menuCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  >
+                    <View style={styles.menuLeft}>
+                      <View style={[styles.vegDot, { backgroundColor: item.isVeg ? "#27AE60" : "#E53E3E" }]} />
+                      <View style={styles.menuInfo}>
+                        <Text style={styles.menuName}>{item.name}</Text>
+                        {!!item.description && (
+                          <Text style={styles.menuDesc} numberOfLines={2}>{item.description}</Text>
+                        )}
+                        <Text style={styles.menuCategory}>{item.category}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.menuPrice}>₹{item.price}</Text>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+
+          {/* Reviews */}
           {reviews && reviews.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Reviews</Text>
@@ -169,12 +279,23 @@ export default function PropertyDetailScreen() {
                     <Text style={styles.reviewerName}>{review.guestName || "Anonymous"}</Text>
                     <View style={styles.reviewRating}>
                       {[1, 2, 3, 4, 5].map((s) => (
-                        <Ionicons key={s} name="star" size={12} color={s <= review.rating ? colors.star : colors.muted} />
+                        <Ionicons
+                          key={s}
+                          name="star"
+                          size={12}
+                          color={s <= review.rating ? colors.star : colors.muted}
+                        />
                       ))}
                     </View>
                   </View>
                   <Text style={styles.reviewComment}>{review.comment}</Text>
-                  <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                  <Text style={styles.reviewDate}>
+                    {new Date(review.createdAt).toLocaleDateString("en-IN", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -187,26 +308,14 @@ export default function PropertyDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  imageGallery: {
-    height: 300,
-    width: "100%",
-  },
-  galleryImage: {
-    width: 400,
-    height: "100%",
-  },
+  container: { flex: 1 },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  imageGallery: { height: 300, width: "100%" },
+  galleryImage: { width: 400, height: "100%" },
   backButton: {
     position: "absolute",
     left: 16,
-    backgroundColor: "rgba(255,255,255,0.8)",
+    backgroundColor: "rgba(255,255,255,0.85)",
     padding: 8,
     borderRadius: 20,
   },
@@ -223,39 +332,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 20,
   },
-  titleSection: {
-    flex: 1,
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  location: {
-    fontSize: 14,
-    color: "#8A7A6E",
-  },
-  ratingBox: {
-    alignItems: "flex-end",
-  },
-  ratingText: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  reviewCount: {
-    fontSize: 12,
-    color: "#8A7A6E",
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 20,
-  },
+  titleSection: { flex: 1 },
+  name: { fontSize: 24, fontWeight: "800", marginBottom: 4 },
+  locationRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  location: { fontSize: 14, color: "#8A7A6E" },
+  ratingBox: { alignItems: "flex-end" },
+  ratingText: { fontSize: 16, fontWeight: "700" },
+  reviewCount: { fontSize: 12, color: "#8A7A6E" },
+  actionRow: { flexDirection: "row", gap: 10, marginBottom: 20 },
   actionBtn: {
     flex: 1,
     flexDirection: "row",
@@ -265,16 +349,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 6,
   },
-  actionBtnText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  badgeRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 24,
-  },
+  actionBtnWhite: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  actionBtnText: { fontSize: 12, fontWeight: "700" },
+  badgeRow: { flexDirection: "row", gap: 10, marginBottom: 24, flexWrap: "wrap" },
   modeBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -283,37 +360,28 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 4,
   },
-  modeBadgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
+  modeBadgeText: { fontSize: 12, fontWeight: "700" },
+  section: { marginBottom: 24 },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
-  description: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#444",
-  },
-  amenitiesGrid: {
+  sectionTitle: { fontSize: 18, fontWeight: "800" },
+  sectionAddBtn: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  amenityChip: {
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
+    borderRadius: 12,
+    gap: 4,
   },
-  amenityText: {
-    fontSize: 13,
-  },
+  sectionAddBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  description: { fontSize: 15, lineHeight: 22, color: "#444" },
+  amenitiesGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  amenityChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  amenityText: { fontSize: 13 },
   roomCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -323,36 +391,46 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 12,
   },
-  roomInfo: {
-    flex: 1,
-  },
-  roomName: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 2,
-  },
-  roomType: {
-    fontSize: 12,
-    color: "#8A7A6E",
-    marginBottom: 6,
-  },
-  roomPrice: {
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  perNight: {
-    fontSize: 12,
-    fontWeight: "400",
-  },
-  bookButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+  roomInfo: { flex: 1 },
+  roomName: { fontSize: 16, fontWeight: "700", marginBottom: 2 },
+  roomType: { fontSize: 12, color: "#8A7A6E", marginBottom: 6 },
+  roomPrice: { fontSize: 16, fontWeight: "800" },
+  perNight: { fontSize: 12, fontWeight: "400" },
+  bookButton: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
+  bookButtonText: { color: "#fff", fontWeight: "700" },
+  editRoomBtn: {
+    width: 36,
+    height: 36,
     borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  bookButtonText: {
-    color: "#fff",
-    fontWeight: "700",
+  catList: { gap: 8, paddingBottom: 14 },
+  catChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    backgroundColor: "#fff",
   },
+  catText: { fontSize: 12, fontWeight: "600", color: "#8A7A6E" },
+  menuCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  menuLeft: { flexDirection: "row", gap: 10, flex: 1, alignItems: "flex-start" },
+  vegDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
+  menuInfo: { flex: 1 },
+  menuName: { fontSize: 15, fontWeight: "700", marginBottom: 2 },
+  menuDesc: { fontSize: 12, color: "#8A7A6E", marginBottom: 4 },
+  menuCategory: { fontSize: 11, color: "#8A7A6E", fontWeight: "500" },
+  menuPrice: { fontSize: 15, fontWeight: "800", marginLeft: 10 },
   reviewCard: {
     marginBottom: 16,
     paddingBottom: 16,
@@ -364,25 +442,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 6,
   },
-  reviewerName: {
-    fontWeight: "700",
-  },
-  reviewRating: {
-    flexDirection: "row",
-    gap: 2,
-  },
-  reviewComment: {
-    fontSize: 14,
-    color: "#444",
-    lineHeight: 20,
-    marginBottom: 6,
-  },
-  reviewDate: {
-    fontSize: 11,
-    color: "#8A7A6E",
-  },
-  emptyText: {
-    color: "#8A7A6E",
-    fontStyle: "italic",
-  },
+  reviewerName: { fontWeight: "700" },
+  reviewRating: { flexDirection: "row", gap: 2 },
+  reviewComment: { fontSize: 14, color: "#444", lineHeight: 20, marginBottom: 6 },
+  reviewDate: { fontSize: 11, color: "#8A7A6E" },
+  emptyText: { color: "#8A7A6E", fontStyle: "italic" },
 });
