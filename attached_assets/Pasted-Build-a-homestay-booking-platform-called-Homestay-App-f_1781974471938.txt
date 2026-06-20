@@ -1,0 +1,96 @@
+Build a homestay booking platform called "Homestay App" for Indian homestays 
+(especially places like Coorg, Ooty, Munnar, Goa)etc.
+
+TWO USER ROLES:
+1. HOST (homestay owner) - manages their property, rooms, bookings
+2. GUEST (traveler) - browses ALL properties, books rooms
+
+CRITICAL RULE: Guest browse screen must show ALL properties from ALL hosts 
+with NO user-based filtering. Only the host dashboard filters by hostId.
+
+DATABASE:
+- Users: id, name, email, mobile, role (host/guest), createdAt
+- Properties: id, hostId, name, address, city, state, photos, description, 
+  amenities, mealsIncluded, locationLat, locationLng, nearbyAttractions, 
+  upiId, bookingMode (inquiry/instant), cancellationPolicy, status (active/inactive)
+- Rooms: id, propertyId, name, type, pricePerNight, capacity, photos, status
+- Bookings: id, roomId, guestId, checkIn, checkOut, status 
+  (pending/confirmed/cancelled/completed), totalAmount, paymentStatus, 
+  specialRequests, referenceNumber, createdAt
+- Reviews: id, propertyId, guestId, rating, comment, createdAt
+- Payments: id, bookingId, amount, method, status, transactionId
+
+HOST FEATURES:
+1. Register/login with mobile OTP or email
+2. Add property with photos, location, amenities, meals info, nearby attractions
+3. Add rooms with photos, pricing, capacity
+4. Dashboard: occupancy %, revenue this month, today check-ins/check-outs
+5. Approve or decline pending booking requests
+6. Calendar view of all bookings
+7. WhatsApp notification when new booking arrives (use Linking to open 
+   WhatsApp with pre-filled message)
+8. Guest management with contact details
+9. Payment tracking (paid vs pending)
+10. Housekeeping and maintenance task tracking
+11. Toggle per property: Inquiry Mode vs Instant Mode
+
+GUEST FEATURES (no login required to browse):
+1. Home screen: search by city, date range, guest count
+2. Browse ALL active properties - show property photo, name, city, price/night, rating
+3. Property detail page: photos gallery, amenities, meals included, 
+   nearby attractions, location map pin with "Get Directions" button, 
+   room list with prices, guest reviews
+4. Real-time availability calendar - already booked dates greyed out
+5. Booking flow - TWO MODES based on host setting:
+
+   INQUIRY MODE:
+   - Guest fills name, mobile, email, dates, guest count
+   - Submit request → status = pending
+   - Guest gets reference number to track status
+   - Host gets WhatsApp notification to approve/decline
+
+   INSTANT MODE:
+   - Guest picks dates, sees price breakdown
+   - Pays via Razorpay (UPI, cards, netbanking) 
+   - Booking auto-confirmed immediately
+   - Host notified via WhatsApp (for awareness, no approval needed)
+
+6. Check booking status by reference number (no login needed)
+7. Leave review after checkout
+8. Guest can book without creating account (auto-create account in background)
+
+UI REQUIREMENTS:
+- Mobile-first React Native (Expo) app, also works as website
+- Warm, trustworthy color scheme (greens/earthy tones like #1B6B5A)
+- Professional clean UI similar to OYO/Airbnb style
+- India-specific: INR pricing, UPI payment, Indian city names in search
+
+TECH:
+- Expo Router (file-based routing)
+- Real persistent database (not local state)
+- Razorpay for payments (test mode first)
+- Proper REST API backend
+
+BUILD ORDER - STRICTLY FOLLOW THIS:
+Phase 1: Host registration + add property + add rooms (confirm working)
+Phase 2: Guest browse ALL properties + property detail page (confirm working)
+Phase 3: Inquiry Mode booking flow end to end (confirm working)  
+Phase 4: Instant Mode with Razorpay payment
+Phase 5: WhatsApp notifications, reviews, housekeeping features
+
+TEST AFTER EACH PHASE before moving to next phase.
+
+Required behavior:
+
+ANY guest, logged in or not, should see ALL properties from ALL
+hosts in the browse/search screen
+The "ownerId" or "hostId" filter should ONLY apply on the HOST'S
+OWN dashboard (where a host manages their 1)property/rooms/bookings)
+— never on the guest-facing browse or search screens
+Add a clear separation: guest browse API should query "all properties
+where status = active" with no user-based filtering at all
+Host dashboard API should query "properties where hostId = current
+logged in user" only
+Test this by: Host A adds a property, Host B adds a different property.
+A guest browsing (logged in as neither, or logged in as Host A) should
+see BOTH properties listed in replit and after publishing and after done with APK also it should work properly.2)the guest booked the room from the owner selected property but there is showing no bookings made so fix this the host or owner should get a message in the dashboard that some one is booked make this thing sure and i need this Homestay app for a long time so delete that unwanted properties you added onley keep the hosts newly adding 3)delete that you creates image for the property and rooms make the hosts or owner a option to add their respective homestay rooms and room booking,add property see this is working properly with a room photos adding,property photos adding etc features.make the real time payment option such as upi,phone pay,google pay,paytm etc for the owner section to recive the payments via upi id from customers or guests.4)make sure evry delete,bookings saving,add property and all other saving etc buttons working properly in this app and change this apps name from stay connect to Homestay App main thing.5)give the owner also booking options of the guests for a personal homestay uses or purposes give also lot more features for the owners for their private use also in add property give the number option first then only they can call the property right please it should be also available for the guests also what is this common things u just add okk.6)make the guest booking sectio clearly attractive with locationj,call option,whatsapp messaging options with all working properly.And Main two things i need after this 7).I need to install this Homestay app in any browser while adding to home screen it should show the install option there i dont need expo go app to open this homestay app after publishing same for IOS also I need. 8).I need this homestay apps APK link to download this app and send it to the different Owners please give the APK of this Homestay app.I need to sell this app so Make this 1,2. this things perfectly i need this mainly take it as serious. so start editing good luck.add also some other guests helpful features to this app something u know which will connect owners also.8)store all the things properly i nedd this app for a life long so keep the database working properly and without any mistake i need to sell this for the different owners.9)i need the dashboard with lot more features  and i need the whats app messages options for booking made,billing,enquiries etc.okk Make sure every step is added to this app properly good luck

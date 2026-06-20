@@ -3,20 +3,36 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Homestay App API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User management
+  - name: properties
+    description: Property management
+  - name: rooms
+    description: Room management
+  - name: bookings
+    description: Booking management
+  - name: reviews
+    description: Review management
+  - name: payments
+    description: Payment management
+  - name: housekeeping
+    description: Housekeeping tasks
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,7 +40,662 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # AUTH
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # PROPERTIES
+  /properties:
+    get:
+      operationId: getProperties
+      tags: [properties]
+      summary: Get all active properties (guest browse - no user filtering)
+      parameters:
+        - name: city
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: checkIn
+          in: query
+          schema:
+            type: string
+        - name: checkOut
+          in: query
+          schema:
+            type: string
+        - name: guests
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of properties
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertiesListResponse"
+
+    post:
+      operationId: createProperty
+      tags: [properties]
+      summary: Create a new property (host only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePropertyRequest"
+      responses:
+        "201":
+          description: Property created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+
+  /properties/host:
+    get:
+      operationId: getHostProperties
+      tags: [properties]
+      summary: Get properties for the current host
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Host properties
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Property"
+
+  /properties/{propertyId}:
+    get:
+      operationId: getProperty
+      tags: [properties]
+      summary: Get property details
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Property details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      operationId: updateProperty
+      tags: [properties]
+      summary: Update property (host only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePropertyRequest"
+      responses:
+        "200":
+          description: Updated property
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+
+    delete:
+      operationId: deleteProperty
+      tags: [properties]
+      summary: Delete property (host only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ROOMS
+  /properties/{propertyId}/rooms:
+    get:
+      operationId: getRooms
+      tags: [rooms]
+      summary: Get all rooms for a property
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of rooms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Room"
+
+    post:
+      operationId: createRoom
+      tags: [rooms]
+      summary: Create a room (host only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoomRequest"
+      responses:
+        "201":
+          description: Room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+
+  /rooms/{roomId}:
+    get:
+      operationId: getRoom
+      tags: [rooms]
+      summary: Get room details
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Room details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+
+    put:
+      operationId: updateRoom
+      tags: [rooms]
+      summary: Update room (host only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRoomRequest"
+      responses:
+        "200":
+          description: Updated room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+
+    delete:
+      operationId: deleteRoom
+      tags: [rooms]
+      summary: Delete room (host only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /rooms/{roomId}/availability:
+    get:
+      operationId: getRoomAvailability
+      tags: [rooms]
+      summary: Get booked dates for a room
+      parameters:
+        - name: roomId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: month
+          in: query
+          schema:
+            type: string
+            description: YYYY-MM format
+      responses:
+        "200":
+          description: Booked dates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+
+  # BOOKINGS
+  /bookings:
+    post:
+      operationId: createBooking
+      tags: [bookings]
+      summary: Create a booking (inquiry or instant)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+      responses:
+        "201":
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  /bookings/status/{referenceNumber}:
+    get:
+      operationId: getBookingByReference
+      tags: [bookings]
+      summary: Track booking by reference number (no login required)
+      parameters:
+        - name: referenceNumber
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Booking status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bookings/guest:
+    get:
+      operationId: getGuestBookings
+      tags: [bookings]
+      summary: Get bookings for the current guest
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Guest bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BookingDetail"
+
+  /bookings/host:
+    get:
+      operationId: getHostBookings
+      tags: [bookings]
+      summary: Get all bookings for host's properties
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: propertyId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Host bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BookingDetail"
+
+  /bookings/{bookingId}:
+    get:
+      operationId: getBooking
+      tags: [bookings]
+      summary: Get booking details
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Booking details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingDetail"
+
+  /bookings/{bookingId}/status:
+    patch:
+      operationId: updateBookingStatus
+      tags: [bookings]
+      summary: Update booking status (host approve/decline)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBookingStatusRequest"
+      responses:
+        "200":
+          description: Updated booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  # DASHBOARD
+  /host/dashboard:
+    get:
+      operationId: getHostDashboard
+      tags: [properties]
+      summary: Get host dashboard stats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostDashboard"
+
+  # REVIEWS
+  /properties/{propertyId}/reviews:
+    get:
+      operationId: getPropertyReviews
+      tags: [reviews]
+      summary: Get reviews for a property
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reviews list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+
+    post:
+      operationId: createReview
+      tags: [reviews]
+      summary: Submit a review
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewRequest"
+      responses:
+        "201":
+          description: Review created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+
+  # HOUSEKEEPING
+  /housekeeping:
+    get:
+      operationId: getHousekeepingTasks
+      tags: [housekeeping]
+      summary: Get housekeeping tasks for host
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: propertyId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tasks list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HousekeepingTask"
+
+    post:
+      operationId: createHousekeepingTask
+      tags: [housekeeping]
+      summary: Create a housekeeping task
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHousekeepingTaskRequest"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HousekeepingTask"
+
+  /housekeeping/{taskId}:
+    patch:
+      operationId: updateHousekeepingTask
+      tags: [housekeeping]
+      summary: Update task status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHousekeepingTaskRequest"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HousekeepingTask"
+
+    delete:
+      operationId: deleteHousekeepingTask
+      tags: [housekeeping]
+      summary: Delete a housekeeping task
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +705,611 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+
+    # AUTH SCHEMAS
+    RegisterRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        mobile:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [host, guest]
+      required:
+        - name
+        - email
+        - password
+        - role
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - token
+        - user
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        mobile:
+          type: string
+        role:
+          type: string
+          enum: [host, guest]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - email
+        - role
+        - createdAt
+
+    # PROPERTY SCHEMAS
+    Property:
+      type: object
+      properties:
+        id:
+          type: string
+        hostId:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        photos:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        amenities:
+          type: array
+          items:
+            type: string
+        mealsIncluded:
+          type: boolean
+        locationLat:
+          type: number
+        locationLng:
+          type: number
+        nearbyAttractions:
+          type: array
+          items:
+            type: string
+        upiId:
+          type: string
+        bookingMode:
+          type: string
+          enum: [inquiry, instant]
+        cancellationPolicy:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+        averageRating:
+          type: number
+        reviewCount:
+          type: integer
+        minPrice:
+          type: number
+        createdAt:
+          type: string
+      required:
+        - id
+        - hostId
+        - name
+        - city
+        - state
+        - bookingMode
+        - status
+        - createdAt
+
+    PropertyDetail:
+      allOf:
+        - $ref: "#/components/schemas/Property"
+        - type: object
+          properties:
+            rooms:
+              type: array
+              items:
+                $ref: "#/components/schemas/Room"
+            reviews:
+              type: array
+              items:
+                $ref: "#/components/schemas/Review"
+            host:
+              $ref: "#/components/schemas/User"
+
+    PropertiesListResponse:
+      type: object
+      properties:
+        properties:
+          type: array
+          items:
+            $ref: "#/components/schemas/Property"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - properties
+        - total
+        - page
+        - limit
+
+    CreatePropertyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        photos:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        amenities:
+          type: array
+          items:
+            type: string
+        mealsIncluded:
+          type: boolean
+        locationLat:
+          type: number
+        locationLng:
+          type: number
+        nearbyAttractions:
+          type: array
+          items:
+            type: string
+        upiId:
+          type: string
+        bookingMode:
+          type: string
+          enum: [inquiry, instant]
+        cancellationPolicy:
+          type: string
+      required:
+        - name
+        - address
+        - city
+        - state
+        - bookingMode
+
+    UpdatePropertyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        photos:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        amenities:
+          type: array
+          items:
+            type: string
+        mealsIncluded:
+          type: boolean
+        locationLat:
+          type: number
+        locationLng:
+          type: number
+        nearbyAttractions:
+          type: array
+          items:
+            type: string
+        upiId:
+          type: string
+        bookingMode:
+          type: string
+          enum: [inquiry, instant]
+        cancellationPolicy:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+
+    # ROOM SCHEMAS
+    Room:
+      type: object
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+        pricePerNight:
+          type: number
+        capacity:
+          type: integer
+        photos:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [available, occupied, maintenance]
+        createdAt:
+          type: string
+      required:
+        - id
+        - propertyId
+        - name
+        - type
+        - pricePerNight
+        - capacity
+        - status
+        - createdAt
+
+    CreateRoomRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        pricePerNight:
+          type: number
+        capacity:
+          type: integer
+        photos:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - type
+        - pricePerNight
+        - capacity
+
+    UpdateRoomRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        pricePerNight:
+          type: number
+        capacity:
+          type: integer
+        photos:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [available, occupied, maintenance]
+
+    AvailabilityResponse:
+      type: object
+      properties:
+        roomId:
+          type: string
+        bookedDates:
+          type: array
+          items:
+            type: string
+      required:
+        - roomId
+        - bookedDates
+
+    # BOOKING SCHEMAS
+    Booking:
+      type: object
+      properties:
+        id:
+          type: string
+        roomId:
+          type: string
+        guestId:
+          type: string
+        checkIn:
+          type: string
+        checkOut:
+          type: string
+        status:
+          type: string
+          enum: [pending, confirmed, cancelled, completed]
+        totalAmount:
+          type: number
+        paymentStatus:
+          type: string
+          enum: [pending, paid, refunded]
+        specialRequests:
+          type: string
+        referenceNumber:
+          type: string
+        guestName:
+          type: string
+        guestEmail:
+          type: string
+        guestMobile:
+          type: string
+        guestCount:
+          type: integer
+        createdAt:
+          type: string
+      required:
+        - id
+        - roomId
+        - checkIn
+        - checkOut
+        - status
+        - totalAmount
+        - paymentStatus
+        - referenceNumber
+        - createdAt
+
+    BookingDetail:
+      allOf:
+        - $ref: "#/components/schemas/Booking"
+        - type: object
+          properties:
+            room:
+              $ref: "#/components/schemas/Room"
+            property:
+              $ref: "#/components/schemas/Property"
+            guest:
+              $ref: "#/components/schemas/User"
+
+    CreateBookingRequest:
+      type: object
+      properties:
+        roomId:
+          type: string
+        checkIn:
+          type: string
+        checkOut:
+          type: string
+        guestCount:
+          type: integer
+        guestName:
+          type: string
+        guestEmail:
+          type: string
+        guestMobile:
+          type: string
+        specialRequests:
+          type: string
+        guestId:
+          type: string
+      required:
+        - roomId
+        - checkIn
+        - checkOut
+        - guestCount
+        - guestName
+        - guestEmail
+        - guestMobile
+
+    UpdateBookingStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [confirmed, cancelled, completed]
+      required:
+        - status
+
+    # HOST DASHBOARD
+    HostDashboard:
+      type: object
+      properties:
+        totalProperties:
+          type: integer
+        totalRooms:
+          type: integer
+        occupancyPercent:
+          type: number
+        revenueThisMonth:
+          type: number
+        todayCheckIns:
+          type: integer
+        todayCheckOuts:
+          type: integer
+        pendingBookings:
+          type: integer
+        recentBookings:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookingDetail"
+      required:
+        - totalProperties
+        - totalRooms
+        - occupancyPercent
+        - revenueThisMonth
+        - todayCheckIns
+        - todayCheckOuts
+        - pendingBookings
+        - recentBookings
+
+    # REVIEW SCHEMAS
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        guestId:
+          type: string
+        guestName:
+          type: string
+        rating:
+          type: number
+        comment:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - propertyId
+        - rating
+        - createdAt
+
+    CreateReviewRequest:
+      type: object
+      properties:
+        propertyId:
+          type: string
+        guestId:
+          type: string
+        guestName:
+          type: string
+        rating:
+          type: number
+        comment:
+          type: string
+      required:
+        - propertyId
+        - rating
+        - comment
+
+    # HOUSEKEEPING SCHEMAS
+    HousekeepingTask:
+      type: object
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        roomId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [cleaning, maintenance, other]
+        status:
+          type: string
+          enum: [pending, in_progress, done]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        dueDate:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - propertyId
+        - title
+        - type
+        - status
+        - priority
+        - createdAt
+
+    CreateHousekeepingTaskRequest:
+      type: object
+      properties:
+        propertyId:
+          type: string
+        roomId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [cleaning, maintenance, other]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        dueDate:
+          type: string
+      required:
+        - propertyId
+        - title
+        - type
+        - priority
+
+    UpdateHousekeepingTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, done]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        dueDate:
+          type: string
