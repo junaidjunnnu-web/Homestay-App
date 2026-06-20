@@ -828,6 +828,156 @@ export const CreateReviewBody = zod.object({
 
 
 /**
+ * @summary List staff members for host
+ */
+export const GetStaffQueryParams = zod.object({
+  "propertyId": zod.coerce.string().optional()
+})
+
+export const GetStaffResponseItem = zod.object({
+  "id": zod.string(),
+  "propertyId": zod.string(),
+  "hostId": zod.string(),
+  "name": zod.string(),
+  "mobile": zod.string().optional(),
+  "role": zod.enum(['manager', 'cleaner', 'cook', 'caretaker', 'receptionist', 'other']),
+  "status": zod.enum(['active', 'inactive']),
+  "notes": zod.string().optional(),
+  "createdAt": zod.string()
+})
+export const GetStaffResponse = zod.array(GetStaffResponseItem)
+
+
+/**
+ * @summary Create staff member
+ */
+export const CreateStaffMemberBody = zod.object({
+  "propertyId": zod.string(),
+  "name": zod.string(),
+  "mobile": zod.string().optional(),
+  "role": zod.enum(['manager', 'cleaner', 'cook', 'caretaker', 'receptionist', 'other']),
+  "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary Update staff member
+ */
+export const UpdateStaffMemberParams = zod.object({
+  "staffId": zod.coerce.string()
+})
+
+export const UpdateStaffMemberBody = zod.object({
+  "name": zod.string().optional(),
+  "mobile": zod.string().optional(),
+  "role": zod.enum(['manager', 'cleaner', 'cook', 'caretaker', 'receptionist', 'other']).optional(),
+  "status": zod.enum(['active', 'inactive']).optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdateStaffMemberResponse = zod.object({
+  "id": zod.string(),
+  "propertyId": zod.string(),
+  "hostId": zod.string(),
+  "name": zod.string(),
+  "mobile": zod.string().optional(),
+  "role": zod.enum(['manager', 'cleaner', 'cook', 'caretaker', 'receptionist', 'other']),
+  "status": zod.enum(['active', 'inactive']),
+  "notes": zod.string().optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete staff member
+ */
+export const DeleteStaffMemberParams = zod.object({
+  "staffId": zod.coerce.string()
+})
+
+export const DeleteStaffMemberResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Get menu items for a property
+ */
+export const GetMenuItemsQueryParams = zod.object({
+  "propertyId": zod.coerce.string()
+})
+
+export const GetMenuItemsResponseItem = zod.object({
+  "id": zod.string(),
+  "propertyId": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "category": zod.enum(['breakfast', 'lunch', 'dinner', 'snacks', 'beverages']),
+  "price": zod.number(),
+  "isAvailable": zod.boolean(),
+  "isVeg": zod.boolean(),
+  "createdAt": zod.string()
+})
+export const GetMenuItemsResponse = zod.array(GetMenuItemsResponseItem)
+
+
+/**
+ * @summary Create menu item
+ */
+export const CreateMenuItemBody = zod.object({
+  "propertyId": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "category": zod.enum(['breakfast', 'lunch', 'dinner', 'snacks', 'beverages']),
+  "price": zod.number().optional(),
+  "isVeg": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update menu item
+ */
+export const UpdateMenuItemParams = zod.object({
+  "menuItemId": zod.coerce.string()
+})
+
+export const UpdateMenuItemBody = zod.object({
+  "name": zod.string().optional(),
+  "description": zod.string().optional(),
+  "category": zod.enum(['breakfast', 'lunch', 'dinner', 'snacks', 'beverages']).optional(),
+  "price": zod.number().optional(),
+  "isAvailable": zod.boolean().optional(),
+  "isVeg": zod.boolean().optional()
+})
+
+export const UpdateMenuItemResponse = zod.object({
+  "id": zod.string(),
+  "propertyId": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().optional(),
+  "category": zod.enum(['breakfast', 'lunch', 'dinner', 'snacks', 'beverages']),
+  "price": zod.number(),
+  "isAvailable": zod.boolean(),
+  "isVeg": zod.boolean(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete menu item
+ */
+export const DeleteMenuItemParams = zod.object({
+  "menuItemId": zod.coerce.string()
+})
+
+export const DeleteMenuItemResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary Get housekeeping tasks for host
  */
 export const GetHousekeepingTasksQueryParams = zod.object({

@@ -26,6 +26,10 @@ tags:
     description: Payment management
   - name: housekeeping
     description: Housekeeping tasks
+  - name: staff
+    description: Staff management
+  - name: menu
+    description: Menu management
 
 paths:
   /healthz:
@@ -594,6 +598,181 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Review"
+
+  # STAFF
+  /staff:
+    get:
+      operationId: getStaff
+      tags: [staff]
+      summary: List staff members for host
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: propertyId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Staff list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StaffMember"
+    post:
+      operationId: createStaffMember
+      tags: [staff]
+      summary: Create staff member
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffRequest"
+      responses:
+        "201":
+          description: Staff member created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+
+  /staff/{staffId}:
+    put:
+      operationId: updateStaffMember
+      tags: [staff]
+      summary: Update staff member
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStaffRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffMember"
+    delete:
+      operationId: deleteStaffMember
+      tags: [staff]
+      summary: Delete staff member
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: staffId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # MENU
+  /menu:
+    get:
+      operationId: getMenuItems
+      tags: [menu]
+      summary: Get menu items for a property
+      parameters:
+        - name: propertyId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Menu items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MenuItem"
+    post:
+      operationId: createMenuItem
+      tags: [menu]
+      summary: Create menu item
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMenuItemRequest"
+      responses:
+        "201":
+          description: Menu item created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItem"
+
+  /menu/{menuItemId}:
+    put:
+      operationId: updateMenuItem
+      tags: [menu]
+      summary: Update menu item
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: menuItemId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMenuItemRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItem"
+    delete:
+      operationId: deleteMenuItem
+      tags: [menu]
+      summary: Delete menu item
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: menuItemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
 
   # HOUSEKEEPING
   /housekeeping:
@@ -1313,3 +1492,142 @@ components:
           enum: [low, medium, high]
         dueDate:
           type: string
+
+    # STAFF SCHEMAS
+    StaffMember:
+      type: object
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        hostId:
+          type: string
+        name:
+          type: string
+        mobile:
+          type: string
+        role:
+          type: string
+          enum: [manager, cleaner, cook, caretaker, receptionist, other]
+        status:
+          type: string
+          enum: [active, inactive]
+        notes:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - propertyId
+        - hostId
+        - name
+        - role
+        - status
+        - createdAt
+
+    CreateStaffRequest:
+      type: object
+      properties:
+        propertyId:
+          type: string
+        name:
+          type: string
+        mobile:
+          type: string
+        role:
+          type: string
+          enum: [manager, cleaner, cook, caretaker, receptionist, other]
+        notes:
+          type: string
+      required:
+        - propertyId
+        - name
+        - role
+
+    UpdateStaffRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        mobile:
+          type: string
+        role:
+          type: string
+          enum: [manager, cleaner, cook, caretaker, receptionist, other]
+        status:
+          type: string
+          enum: [active, inactive]
+        notes:
+          type: string
+
+    # MENU SCHEMAS
+    MenuItem:
+      type: object
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [breakfast, lunch, dinner, snacks, beverages]
+        price:
+          type: number
+        isAvailable:
+          type: boolean
+        isVeg:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - propertyId
+        - name
+        - category
+        - price
+        - isAvailable
+        - isVeg
+        - createdAt
+
+    CreateMenuItemRequest:
+      type: object
+      properties:
+        propertyId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [breakfast, lunch, dinner, snacks, beverages]
+        price:
+          type: number
+        isVeg:
+          type: boolean
+      required:
+        - propertyId
+        - name
+        - category
+
+    UpdateMenuItemRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [breakfast, lunch, dinner, snacks, beverages]
+        price:
+          type: number
+        isAvailable:
+          type: boolean
+        isVeg:
+          type: boolean

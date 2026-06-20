@@ -417,6 +417,149 @@ export interface UpdateHousekeepingTaskRequest {
   dueDate?: string;
 }
 
+export type StaffMemberRole = typeof StaffMemberRole[keyof typeof StaffMemberRole];
+
+
+export const StaffMemberRole = {
+  manager: 'manager',
+  cleaner: 'cleaner',
+  cook: 'cook',
+  caretaker: 'caretaker',
+  receptionist: 'receptionist',
+  other: 'other',
+} as const;
+
+export type StaffMemberStatus = typeof StaffMemberStatus[keyof typeof StaffMemberStatus];
+
+
+export const StaffMemberStatus = {
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
+export interface StaffMember {
+  id: string;
+  propertyId: string;
+  hostId: string;
+  name: string;
+  mobile?: string;
+  role: StaffMemberRole;
+  status: StaffMemberStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+export type CreateStaffRequestRole = typeof CreateStaffRequestRole[keyof typeof CreateStaffRequestRole];
+
+
+export const CreateStaffRequestRole = {
+  manager: 'manager',
+  cleaner: 'cleaner',
+  cook: 'cook',
+  caretaker: 'caretaker',
+  receptionist: 'receptionist',
+  other: 'other',
+} as const;
+
+export interface CreateStaffRequest {
+  propertyId: string;
+  name: string;
+  mobile?: string;
+  role: CreateStaffRequestRole;
+  notes?: string;
+}
+
+export type UpdateStaffRequestRole = typeof UpdateStaffRequestRole[keyof typeof UpdateStaffRequestRole];
+
+
+export const UpdateStaffRequestRole = {
+  manager: 'manager',
+  cleaner: 'cleaner',
+  cook: 'cook',
+  caretaker: 'caretaker',
+  receptionist: 'receptionist',
+  other: 'other',
+} as const;
+
+export type UpdateStaffRequestStatus = typeof UpdateStaffRequestStatus[keyof typeof UpdateStaffRequestStatus];
+
+
+export const UpdateStaffRequestStatus = {
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
+export interface UpdateStaffRequest {
+  name?: string;
+  mobile?: string;
+  role?: UpdateStaffRequestRole;
+  status?: UpdateStaffRequestStatus;
+  notes?: string;
+}
+
+export type MenuItemCategory = typeof MenuItemCategory[keyof typeof MenuItemCategory];
+
+
+export const MenuItemCategory = {
+  breakfast: 'breakfast',
+  lunch: 'lunch',
+  dinner: 'dinner',
+  snacks: 'snacks',
+  beverages: 'beverages',
+} as const;
+
+export interface MenuItem {
+  id: string;
+  propertyId: string;
+  name: string;
+  description?: string;
+  category: MenuItemCategory;
+  price: number;
+  isAvailable: boolean;
+  isVeg: boolean;
+  createdAt: string;
+}
+
+export type CreateMenuItemRequestCategory = typeof CreateMenuItemRequestCategory[keyof typeof CreateMenuItemRequestCategory];
+
+
+export const CreateMenuItemRequestCategory = {
+  breakfast: 'breakfast',
+  lunch: 'lunch',
+  dinner: 'dinner',
+  snacks: 'snacks',
+  beverages: 'beverages',
+} as const;
+
+export interface CreateMenuItemRequest {
+  propertyId: string;
+  name: string;
+  description?: string;
+  category: CreateMenuItemRequestCategory;
+  price?: number;
+  isVeg?: boolean;
+}
+
+export type UpdateMenuItemRequestCategory = typeof UpdateMenuItemRequestCategory[keyof typeof UpdateMenuItemRequestCategory];
+
+
+export const UpdateMenuItemRequestCategory = {
+  breakfast: 'breakfast',
+  lunch: 'lunch',
+  dinner: 'dinner',
+  snacks: 'snacks',
+  beverages: 'beverages',
+} as const;
+
+export interface UpdateMenuItemRequest {
+  name?: string;
+  description?: string;
+  category?: UpdateMenuItemRequestCategory;
+  price?: number;
+  isAvailable?: boolean;
+  isVeg?: boolean;
+}
+
 export type GetPropertiesParams = {
 city?: string;
 state?: string;
@@ -437,6 +580,14 @@ month?: string;
 export type GetHostBookingsParams = {
 status?: string;
 propertyId?: string;
+};
+
+export type GetStaffParams = {
+propertyId?: string;
+};
+
+export type GetMenuItemsParams = {
+propertyId: string;
 };
 
 export type GetHousekeepingTasksParams = {

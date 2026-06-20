@@ -1,54 +1,14 @@
 import { BlurView } from "expo-blur";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
-import { Feather, Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 
-function NativeTabLayout() {
-  const { user } = useAuth();
-  const isHost = user?.role === "host";
-
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "safari", selected: "safari.fill" }} />
-        <Label>Explore</Label>
-      </NativeTabs.Trigger>
-      
-      <NativeTabs.Trigger name="bookings">
-        <Icon sf={{ default: "calendar", selected: "calendar.badge.checkmark" }} />
-        <Label>Bookings</Label>
-      </NativeTabs.Trigger>
-
-      {isHost && (
-        <NativeTabs.Trigger name="dashboard">
-          <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
-          <Label>Dashboard</Label>
-        </NativeTabs.Trigger>
-      )}
-
-      {isHost && (
-        <NativeTabs.Trigger name="manage">
-          <Icon sf={{ default: "slider.horizontal.3", selected: "slider.horizontal.3" }} />
-          <Label>Manage</Label>
-        </NativeTabs.Trigger>
-      )}
-
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>Profile</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
-
-function ClassicTabLayout() {
+export default function TabLayout() {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -92,23 +52,12 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: "Explore",
+          href: isHost ? null : "/(tabs)",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="safari" tintColor={color} size={24} />
             ) : (
               <Feather name="search" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="bookings"
-        options={{
-          title: "Bookings",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="calendar" tintColor={color} size={24} />
-            ) : (
-              <Feather name="calendar" size={22} color={color} />
             ),
         }}
       />
@@ -119,22 +68,60 @@ function ClassicTabLayout() {
           href: isHost ? "/dashboard" : null,
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="chart.bar" tintColor={color} size={24} />
+              <SymbolView name="house" tintColor={color} size={24} />
             ) : (
-              <Feather name="bar-chart" size={22} color={color} />
+              <Feather name="home" size={22} color={color} />
             ),
         }}
       />
       <Tabs.Screen
-        name="manage"
+        name="properties"
         options={{
-          title: "Manage",
-          href: isHost ? "/manage" : null,
+          title: "Properties",
+          href: isHost ? "/properties" : null,
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="slider.horizontal.3" tintColor={color} size={24} />
+              <SymbolView name="building" tintColor={color} size={24} />
             ) : (
-              <Feather name="settings" size={22} color={color} />
+              <Feather name="home" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="bookings"
+        options={{
+          title: isHost ? "Bookings" : "Bookings",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="calendar" tintColor={color} size={24} />
+            ) : (
+              <Feather name="calendar" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="finance"
+        options={{
+          title: "Finance",
+          href: isHost ? "/finance" : null,
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="chart.bar" tintColor={color} size={24} />
+            ) : (
+              <Feather name="bar-chart-2" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: "More",
+          href: isHost ? "/more" : null,
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="square.grid.2x2" tintColor={color} size={24} />
+            ) : (
+              <Feather name="grid" size={22} color={color} />
             ),
         }}
       />
@@ -142,6 +129,7 @@ function ClassicTabLayout() {
         name="profile"
         options={{
           title: "Profile",
+          href: isHost ? null : "/profile",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="person" tintColor={color} size={24} />
@@ -152,11 +140,4 @@ function ClassicTabLayout() {
       />
     </Tabs>
   );
-}
-
-export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout />;
 }

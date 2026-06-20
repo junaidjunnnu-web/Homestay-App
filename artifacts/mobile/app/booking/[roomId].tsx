@@ -8,12 +8,13 @@ import {
   Text,
   TextInput,
   View,
+  Linking,
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCreateBooking, useGetRoom } from "@workspace/api-client-react";
+import { useCreateBooking, useGetRoom, useGetProperty } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
@@ -26,6 +27,7 @@ export default function BookingScreen() {
   const { user } = useAuth();
 
   const { data: room, isLoading: isLoadingRoom } = useGetRoom(roomId!);
+  const { data: property } = useGetProperty(room?.propertyId || "", { query: { enabled: !!room?.propertyId } as any });
   const { mutate: createBooking, isPending } = useCreateBooking();
 
   const [form, setForm] = useState({
@@ -42,8 +44,7 @@ export default function BookingScreen() {
 
   const calculateTotal = () => {
     if (!room) return 0;
-    // Simple mock calculation - in real app would use date diff
-    const nights = 2; 
+    const nights = 2; // In real app, calculate from dates
     return nights * room.pricePerNight;
   };
 
@@ -85,6 +86,19 @@ export default function BookingScreen() {
     }
   };
 
+  const openUPI = () => {
+    if (!successData || !property?.upiId) return;
+    const upiUrl = `upi://pay?pa=${property.upiId}&pn=${encodeURIComponent(property.name)}&am=${calculateTotal()}&tn=Booking%20${successData.referenceNumber}&cu=INR`;
+    Linking.openURL(upiUrl);
+  };
+
+  const shareWhatsApp = () => {
+    if (!successData) return;
+    const text = `Booking Confirmed!\nProperty: ${property?.name}\nReference: ${successData.referenceNumber}\nAmount: ₹${calculateTotal()}`;
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    Linking.openURL(url);
+  };
+
   if (isLoadingRoom) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
@@ -101,24 +115,35 @@ export default function BookingScreen() {
             <Ionicons name="checkmark" size={60} color="#fff" />
           </View>
           <Text style={styles.successTitle}>Booking Confirmed!</Text>
-          <Text style={styles.successSub}>Your stay at {room?.name} is booked.</Text>
+          <Text style={styles.successSub}>Your stay at {property?.name} is booked.</Text>
           
           <View style={[styles.referenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={styles.referenceLabel}>Booking Reference</Text>
-            <Text style={styles.referenceValue}>{successData.referenceNumber}</Text>
+            <Text style={[styles.referenceValue, { color: colors.primary }]}>{successData.referenceNumber}</Text>
             <Pressable style={styles.copyButton} onPress={copyReference}>
               <Feather name="copy" size={16} color={colors.primary} />
               <Text style={[styles.copyText, { color: colors.primary }]}>Copy</Text>
             </Pressable>
           </View>
 
-          <Text style={styles.successHint}>Keep this reference number to track your booking.</Text>
+          <View style={styles.successActions}>
+            {property?.upiId && (
+              <Pressable style={[styles.paymentBtn, { backgroundColor: colors.primary }]} onPress={openUPI}>
+                <Ionicons name="qr-code" size={20} color="#fff" />
+                <Text style={styles.paymentBtnText}>Pay via UPI</Text>
+              </Pressable>
+            )}
+            <Pressable style={[styles.shareBtn, { borderColor: "#25D366" }]} onPress={shareWhatsApp}>
+              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+              <Text style={[styles.shareBtnText, { color: "#25D366" }]}>Share on WhatsApp</Text>
+            </Pressable>
+          </View>
 
           <Pressable
-            style={[styles.doneButton, { backgroundColor: colors.primary }]}
+            style={[styles.doneButton, { backgroundColor: colors.muted }]}
             onPress={() => router.replace("/(tabs)")}
           >
-            <Text style={styles.doneButtonText}>Go to Home</Text>
+            <Text style={[styles.doneButtonText, { color: colors.foreground }]}>Go to Home</Text>
           </Pressable>
         </View>
       </View>
@@ -142,7 +167,7 @@ export default function BookingScreen() {
         </View>
 
         <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>Stay Dates</Text>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Stay Dates</Text>
           <View style={styles.row}>
             <View style={styles.flex1}>
               <Text style={styles.label}>Check-in</Text>
@@ -167,7 +192,7 @@ export default function BookingScreen() {
         </View>
 
         <View style={styles.formSection}>
-          <Text style={styles.sectionTitle}>Guest Details</Text>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Guest Details</Text>
           <Text style={styles.label}>Number of Guests</Text>
           <TextInput
             style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -223,7 +248,7 @@ export default function BookingScreen() {
           <View style={styles.divider} />
           <View style={styles.priceRow}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>₹{calculateTotal().toLocaleString("en-IN")}</Text>
+            <Text style={[styles.totalValue, { color: colors.primary }]}>₹{calculateTotal().toLocaleString("en-IN")}</Text>
           </View>
         </View>
 
@@ -245,201 +270,47 @@ export default function BookingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  content: {
-    padding: 20,
-  },
-  roomSummary: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 24,
-  },
-  summaryTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  summarySub: {
-    fontSize: 14,
-    color: "#666",
-  },
-  formSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 16,
-    color: "#1B6B5A",
-  },
-  row: {
-    flexDirection: "row",
-  },
-  flex1: {
-    flex: 1,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 8,
-    color: "#444",
-  },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  textArea: {
-    height: 100,
-    paddingTop: 12,
-    textAlignVertical: "top",
-  },
-  priceBreakdown: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 32,
-  },
-  breakdownTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 12,
-  },
-  priceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  priceLabel: {
-    fontSize: 14,
-    color: "#666",
-  },
-  priceValue: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#eee",
-    marginVertical: 12,
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1B6B5A",
-  },
-  submitButton: {
-    height: 56,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  successContainer: {
-    flex: 1,
-  },
-  successContent: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 30,
-  },
-  successIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  successTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-  successSub: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 32,
-  },
-  referenceCard: {
-    width: "100%",
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  referenceLabel: {
-    fontSize: 12,
-    color: "#999",
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  referenceValue: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: 1,
-    marginBottom: 16,
-  },
-  copyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  copyText: {
-    fontWeight: "600",
-  },
-  successHint: {
-    fontSize: 13,
-    color: "#999",
-    textAlign: "center",
-    marginBottom: 40,
-  },
-  doneButton: {
-    width: "100%",
-    height: 56,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  doneButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-  },
+  container: { flex: 1 },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 16 },
+  backButton: { padding: 8 },
+  headerTitle: { fontSize: 18, fontWeight: "700" },
+  content: { padding: 20 },
+  roomSummary: { padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 24 },
+  summaryTitle: { fontSize: 18, fontWeight: "700", marginBottom: 4 },
+  summarySub: { fontSize: 14, color: "#666" },
+  formSection: { marginBottom: 24 },
+  sectionTitle: { fontSize: 16, fontWeight: "700", marginBottom: 16 },
+  row: { flexDirection: "row" },
+  flex1: { flex: 1 },
+  label: { fontSize: 14, fontWeight: "500", marginBottom: 8, color: "#444" },
+  input: { height: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, fontSize: 16, marginBottom: 16 },
+  textArea: { height: 100, paddingTop: 12, textAlignVertical: "top" },
+  priceBreakdown: { padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 32 },
+  breakdownTitle: { fontSize: 16, fontWeight: "700", marginBottom: 12 },
+  priceRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  priceLabel: { fontSize: 14, color: "#666" },
+  priceValue: { fontSize: 14, fontWeight: "600" },
+  divider: { height: 1, backgroundColor: "#eee", marginVertical: 12 },
+  totalLabel: { fontSize: 16, fontWeight: "700" },
+  totalValue: { fontSize: 18, fontWeight: "700" },
+  submitButton: { height: 56, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  submitButtonText: { color: "#fff", fontSize: 18, fontWeight: "700" },
+  successContainer: { flex: 1 },
+  successContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 30 },
+  successIcon: { width: 100, height: 100, borderRadius: 50, justifyContent: "center", alignItems: "center", marginBottom: 24 },
+  successTitle: { fontSize: 24, fontWeight: "700", marginBottom: 8 },
+  successSub: { fontSize: 16, color: "#666", textAlign: "center", marginBottom: 32 },
+  referenceCard: { width: "100%", padding: 20, borderRadius: 16, borderWidth: 1, alignItems: "center", marginBottom: 24 },
+  referenceLabel: { fontSize: 12, color: "#999", textTransform: "uppercase", marginBottom: 8 },
+  referenceValue: { fontSize: 28, fontWeight: "800", letterSpacing: 1, marginBottom: 16 },
+  copyButton: { flexDirection: "row", alignItems: "center", gap: 6 },
+  copyText: { fontWeight: "600" },
+  successActions: { width: "100%", gap: 12, marginBottom: 24 },
+  paymentBtn: { height: 56, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  paymentBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  shareBtn: { height: 56, borderRadius: 12, borderWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  shareBtnText: { fontSize: 16, fontWeight: "700" },
+  doneButton: { width: "100%", height: 56, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  doneButtonText: { fontSize: 16, fontWeight: "700" },
 });

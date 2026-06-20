@@ -47,121 +47,142 @@ export default function PropertyDetailScreen() {
     Linking.openURL(url);
   };
 
+  const openWhatsApp = () => {
+    const url = `https://wa.me/91${property.host?.mobile}?text=${encodeURIComponent(`Hi, I'm interested in booking ${property.name}`)}`;
+    Linking.openURL(url);
+  };
+
+  const openCall = () => {
+    Linking.openURL(`tel:+91${property.host?.mobile}`);
+  };
+
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
-      <View style={styles.imageGallery}>
-        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
-          {property.photos && property.photos.length > 0 ? (
-            property.photos.map((photo, index) => (
-              <ExpoImage key={index} source={{ uri: photo }} style={styles.galleryImage} />
-            ))
-          ) : (
-            <LinearGradient colors={[colors.primary, colors.accent]} style={styles.galleryImage} />
-          )}
-        </ScrollView>
-        <Pressable style={[styles.backButton, { top: insets.top + 12 }]} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color="#000" />
-        </Pressable>
-        {property.bookingMode === "instant" && (
-          <View style={[styles.bookingModeBadge, { top: insets.top + 12 }]}>
-            <Text style={styles.bookingModeText}>Instant Book</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <View style={styles.titleSection}>
-            <Text style={styles.name}>{property.name}</Text>
-            <Text style={styles.location}>{property.city}, {property.state}</Text>
-          </View>
-          <View style={styles.ratingBox}>
-            <Ionicons name="star" size={16} color={colors.star} />
-            <Text style={styles.ratingText}>{property.averageRating?.toFixed(1) || "New"}</Text>
-            <Text style={styles.reviewCount}>({property.reviewCount || 0})</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About this place</Text>
-          <Text style={styles.description}>{property.description}</Text>
-        </View>
-
-        {property.amenities && property.amenities.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Amenities</Text>
-            <View style={styles.amenitiesGrid}>
-              {property.amenities.map((amenity) => (
-                <View key={amenity} style={[styles.amenityChip, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Text style={styles.amenityText}>{amenity}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {property.mealsIncluded && (
-          <View style={[styles.mealsCard, { backgroundColor: colors.accent + "20", borderColor: colors.accent }]}>
-            <Feather name="coffee" size={20} color={colors.primary} />
-            <View>
-              <Text style={styles.mealsCardTitle}>Home-cooked meals included</Text>
-              <Text style={styles.mealsCardSub}>Authentic local flavors prepared by the host</Text>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Available Rooms</Text>
-          {property.rooms && property.rooms.length > 0 ? (
-            property.rooms.map((room) => (
-              <View key={room.id} style={[styles.roomCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.roomInfo}>
-                  <Text style={styles.roomName}>{room.name}</Text>
-                  <Text style={styles.roomType}>{room.type} • Up to {room.capacity} guests</Text>
-                  <Text style={styles.roomPrice}>₹{room.pricePerNight.toLocaleString("en-IN")} <Text style={styles.perNight}>/night</Text></Text>
-                </View>
-                <Pressable
-                  style={[styles.bookButton, { backgroundColor: colors.primary }]}
-                  onPress={() => router.push(`/booking/${room.id}`)}
-                >
-                  <Text style={styles.bookButtonText}>Book</Text>
-                </Pressable>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.emptyText}>No rooms listed yet</Text>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <Pressable style={[styles.directionsButton, { borderColor: colors.primary }]} onPress={openMaps}>
-            <Feather name="map-pin" size={18} color={colors.primary} />
-            <Text style={[styles.directionsText, { color: colors.primary }]}>Get Directions</Text>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <View style={styles.imageGallery}>
+          <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+            {property.photos && property.photos.length > 0 ? (
+              property.photos.map((photo, index) => (
+                <ExpoImage key={index} source={{ uri: photo }} style={styles.galleryImage} />
+              ))
+            ) : (
+              <LinearGradient colors={[colors.primary, colors.accent]} style={styles.galleryImage} />
+            )}
+          </ScrollView>
+          <Pressable style={[styles.backButton, { top: insets.top + 12 }]} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color="#000" />
           </Pressable>
         </View>
 
-        {reviews && reviews.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Reviews</Text>
-            {reviews.map((review) => (
-              <View key={review.id} style={styles.reviewCard}>
-                <View style={styles.reviewHeader}>
-                  <Text style={styles.reviewerName}>{review.guestName || "Anonymous"}</Text>
-                  <View style={styles.reviewRating}>
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Ionicons key={s} name="star" size={12} color={s <= review.rating ? colors.star : colors.muted} />
-                    ))}
-                  </View>
-                </View>
-                <Text style={styles.reviewComment}>{review.comment}</Text>
-                <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <View style={styles.titleSection}>
+              <Text style={styles.name}>{property.name}</Text>
+              <View style={styles.locationRow}>
+                <Feather name="map-pin" size={14} color={colors.mutedForeground} />
+                <Text style={styles.location}>{property.city}, {property.state}</Text>
               </View>
-            ))}
+            </View>
+            <View style={styles.ratingBox}>
+              <Ionicons name="star" size={16} color={colors.star} />
+              <Text style={styles.ratingText}>{property.averageRating?.toFixed(1) || "New"}</Text>
+              <Text style={styles.reviewCount}>({property.reviewCount || 0})</Text>
+            </View>
           </View>
-        )}
-      </View>
-      <View style={{ height: 100 }} />
-    </ScrollView>
+
+          <View style={styles.actionRow}>
+            <Pressable style={[styles.actionBtn, { backgroundColor: "#25D366" }]} onPress={openWhatsApp}>
+              <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+              <Text style={styles.actionBtnText}>WhatsApp</Text>
+            </Pressable>
+            <Pressable style={[styles.actionBtn, { borderWidth: 1, borderColor: colors.primary }]} onPress={openCall}>
+              <Feather name="phone" size={18} color={colors.primary} />
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>Call Owner</Text>
+            </Pressable>
+            <Pressable style={[styles.actionBtn, { borderWidth: 1, borderColor: "#3B82F6" }]} onPress={openMaps}>
+              <Feather name="map" size={18} color="#3B82F6" />
+              <Text style={[styles.actionBtnText, { color: "#3B82F6" }]}>Directions</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.badgeRow}>
+            <View style={[styles.modeBadge, { backgroundColor: colors.primary + "15" }]}>
+              <Text style={[styles.modeBadgeText, { color: colors.primary }]}>
+                {property.bookingMode === "instant" ? "Instant Booking" : "Inquiry Booking"}
+              </Text>
+            </View>
+            {property.mealsIncluded && (
+              <View style={[styles.modeBadge, { backgroundColor: "#27AE6015" }]}>
+                <Ionicons name="restaurant-outline" size={12} color="#27AE60" />
+                <Text style={[styles.modeBadgeText, { color: "#27AE60" }]}>Meals Included</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>About this place</Text>
+            <Text style={styles.description}>{property.description}</Text>
+          </View>
+
+          {property.amenities && property.amenities.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Amenities</Text>
+              <View style={styles.amenitiesGrid}>
+                {property.amenities.map((amenity) => (
+                  <View key={amenity} style={[styles.amenityChip, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Text style={styles.amenityText}>{amenity}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Available Rooms</Text>
+            {property.rooms && property.rooms.length > 0 ? (
+              property.rooms.map((room) => (
+                <View key={room.id} style={[styles.roomCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View style={styles.roomInfo}>
+                    <Text style={styles.roomName}>{room.name}</Text>
+                    <Text style={styles.roomType}>{room.type} • Up to {room.capacity} guests</Text>
+                    <Text style={styles.roomPrice}>₹{room.pricePerNight.toLocaleString("en-IN")} <Text style={styles.perNight}>/night</Text></Text>
+                  </View>
+                  <Pressable
+                    style={[styles.bookButton, { backgroundColor: colors.primary }]}
+                    onPress={() => router.push(`/booking/${room.id}`)}
+                  >
+                    <Text style={styles.bookButtonText}>Book</Text>
+                  </Pressable>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>No rooms listed yet</Text>
+            )}
+          </View>
+
+          {reviews && reviews.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Reviews</Text>
+              {reviews.map((review) => (
+                <View key={review.id} style={styles.reviewCard}>
+                  <View style={styles.reviewHeader}>
+                    <Text style={styles.reviewerName}>{review.guestName || "Anonymous"}</Text>
+                    <View style={styles.reviewRating}>
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Ionicons key={s} name="star" size={12} color={s <= review.rating ? colors.star : colors.muted} />
+                      ))}
+                    </View>
+                  </View>
+                  <Text style={styles.reviewComment}>{review.comment}</Text>
+                  <Text style={styles.reviewDate}>{new Date(review.createdAt).toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    </View>
   );
 }
 
@@ -179,7 +200,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   galleryImage: {
-    width: 400, // Fixed width for horizontal scroll
+    width: 400,
     height: "100%",
   },
   backButton: {
@@ -189,25 +210,12 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
   },
-  bookingModeBadge: {
-    position: "absolute",
-    right: 16,
-    backgroundColor: "#1B6B5A",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  bookingModeText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
   content: {
     padding: 20,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     marginTop: -24,
-    backgroundColor: "#f7f9f7",
+    backgroundColor: "#FAF6F1",
   },
   header: {
     flexDirection: "row",
@@ -220,12 +228,17 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 24,
-    fontWeight: "700",
+    fontWeight: "800",
     marginBottom: 4,
   },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   location: {
-    fontSize: 16,
-    color: "#666",
+    fontSize: 14,
+    color: "#8A7A6E",
   },
   ratingBox: {
     alignItems: "flex-end",
@@ -236,14 +249,50 @@ const styles = StyleSheet.create({
   },
   reviewCount: {
     fontSize: 12,
-    color: "#666",
+    color: "#8A7A6E",
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 20,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  actionBtnText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  badgeRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 24,
+  },
+  modeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  modeBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     marginBottom: 12,
   },
   description: {
@@ -265,29 +314,12 @@ const styles = StyleSheet.create({
   amenityText: {
     fontSize: 13,
   },
-  mealsCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 12,
-    marginBottom: 24,
-  },
-  mealsCardTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  mealsCardSub: {
-    fontSize: 12,
-    color: "#666",
-  },
   roomCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     marginBottom: 12,
   },
@@ -296,17 +328,17 @@ const styles = StyleSheet.create({
   },
   roomName: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
     marginBottom: 2,
   },
   roomType: {
     fontSize: 12,
-    color: "#666",
+    color: "#8A7A6E",
     marginBottom: 6,
   },
   roomPrice: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   perNight: {
     fontSize: 12,
@@ -315,30 +347,17 @@ const styles = StyleSheet.create({
   bookButton: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   bookButtonText: {
     color: "#fff",
     fontWeight: "700",
   },
-  directionsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    gap: 8,
-  },
-  directionsText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
   reviewCard: {
     marginBottom: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "#EDE4DC",
   },
   reviewHeader: {
     flexDirection: "row",
@@ -346,7 +365,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   reviewerName: {
-    fontWeight: "600",
+    fontWeight: "700",
   },
   reviewRating: {
     flexDirection: "row",
@@ -360,10 +379,10 @@ const styles = StyleSheet.create({
   },
   reviewDate: {
     fontSize: 11,
-    color: "#999",
+    color: "#8A7A6E",
   },
   emptyText: {
-    color: "#999",
+    color: "#8A7A6E",
     fontStyle: "italic",
   },
 });

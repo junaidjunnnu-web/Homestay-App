@@ -272,6 +272,6 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#1B6B5A",
+    color: "#E8824A",
   },
 });

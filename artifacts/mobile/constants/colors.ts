@@ -1,39 +1,45 @@
 const colors = {
   light: {
-    text: "#1a2e1a",
-    tint: "#1B6B5A",
+    text: "#1A1A1A",
+    tint: "#E8824A",
 
-    background: "#f7f9f7",
-    foreground: "#1a2e1a",
+    background: "#FAF6F1",
+    foreground: "#1A1A1A",
 
-    card: "#ffffff",
-    cardForeground: "#1a2e1a",
+    card: "#FFFFFF",
+    cardForeground: "#1A1A1A",
 
-    primary: "#1B6B5A",
-    primaryForeground: "#ffffff",
+    primary: "#E8824A",
+    primaryForeground: "#FFFFFF",
 
-    secondary: "#e8f5e9",
-    secondaryForeground: "#1B6B5A",
+    secondary: "#FDE8D5",
+    secondaryForeground: "#C45E2A",
 
-    muted: "#f0f4f0",
-    mutedForeground: "#6b7c6b",
+    muted: "#F2EDE8",
+    mutedForeground: "#8A7A6E",
 
-    accent: "#d4edda",
-    accentForeground: "#1B6B5A",
+    accent: "#FFF0E6",
+    accentForeground: "#E8824A",
 
-    destructive: "#c0392b",
-    destructiveForeground: "#ffffff",
+    destructive: "#E53E3E",
+    destructiveForeground: "#FFFFFF",
 
-    border: "#d8e8d8",
-    input: "#e8f0e8",
+    border: "#EDE4DC",
+    input: "#F5EFE8",
 
     // Homestay-specific
-    success: "#27ae60",
-    warning: "#f39c12",
-    star: "#f1c40f",
-    overlay: "rgba(27, 107, 90, 0.85)",
-    surface: "#ffffff",
-    divider: "#e0ece0",
+    success: "#27AE60",
+    warning: "#F39C12",
+    star: "#F1C40F",
+    overlay: "rgba(232, 130, 74, 0.85)",
+    surface: "#FFFFFF",
+    divider: "#EDE4DC",
+
+    // Extra semantic
+    green: "#27AE60",
+    orange: "#E8824A",
+    blue: "#3B82F6",
+    purple: "#8B5CF6",
   },
 
   radius: 12,

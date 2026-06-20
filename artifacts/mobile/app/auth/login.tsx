@@ -13,7 +13,7 @@ import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { ScrollView } from "react-native";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -41,7 +41,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAwareScrollViewCompat style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 40 }]}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="close" size={28} color="#000" />
@@ -101,7 +101,7 @@ export default function LoginScreen() {
           </Link>
         </View>
       </View>
-    </KeyboardAwareScrollViewCompat>
+    </ScrollView>
   );
 }
 
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: "800",
-    color: "#1B6B5A",
+    color: "#E8824A",
   },
   subtitle: {
     fontSize: 16,
