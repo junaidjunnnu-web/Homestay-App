@@ -11,14 +11,29 @@
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1B6B5A"
+      "backgroundColor": "#E8824A"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.homestayapp.mobile"
     },
-    "android": {},
+    "android": {
+      "package": "com.homestayapp.mobile",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#E8824A"
+      }
+    },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/icon.png",
+      "name": "Homestay App",
+      "shortName": "Homestay",
+      "description": "Manage and book beautiful Indian homestays",
+      "themeColor": "#E8824A",
+      "backgroundColor": "#FAF6F1"
     },
     "plugins": [
       [

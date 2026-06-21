@@ -10,10 +10,11 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGetHostProperties, useCreateBooking } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import DatePicker from "@/components/DatePicker";
 
 export default function AddBookingScreen() {
   const colors = useColors();
@@ -73,16 +74,14 @@ export default function AddBookingScreen() {
     );
   };
 
-  const formatDate = (text: string) => {
-    const cleaned = text.replace(/\D/g, "");
-    if (cleaned.length >= 4 && cleaned.length <= 6) {
-      return `${cleaned.slice(0, 4)}-${cleaned.slice(4)}`;
-    }
-    if (cleaned.length > 6) {
-      return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 6)}-${cleaned.slice(6, 8)}`;
-    }
-    return cleaned;
-  };
+  const nights = useMemo(() => {
+    if (!form.checkIn || !form.checkOut) return 0;
+    const a = new Date(form.checkIn + "T00:00:00");
+    const b = new Date(form.checkOut + "T00:00:00");
+    return Math.max(0, Math.ceil((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)));
+  }, [form.checkIn, form.checkOut]);
+
+  const todayStr = new Date().toISOString().split("T")[0]!;
 
   return (
     <ScrollView
@@ -185,33 +184,33 @@ export default function AddBookingScreen() {
 
         {/* Dates */}
         <Text style={styles.sectionLabel}>STAY DATES</Text>
-        <View style={styles.row}>
-          <View style={styles.flex1}>
-            <Text style={styles.label}>Check-In Date *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              value={form.checkIn}
-              onChangeText={text => setForm({ ...form, checkIn: formatDate(text) })}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.mutedForeground}
-              keyboardType="numeric"
-              maxLength={10}
-            />
+        <Text style={styles.label}>Check-In Date *</Text>
+        <DatePicker
+          value={form.checkIn}
+          onChange={date => setForm(prev => ({
+            ...prev,
+            checkIn: date,
+            checkOut: prev.checkOut && prev.checkOut <= date ? "" : prev.checkOut,
+          }))}
+          placeholder="Select check-in date"
+          minDate={todayStr}
+          label="Select Check-in Date"
+        />
+        <Text style={styles.label}>Check-Out Date *</Text>
+        <DatePicker
+          value={form.checkOut}
+          onChange={date => setForm(prev => ({ ...prev, checkOut: date }))}
+          placeholder="Select check-out date"
+          minDate={form.checkIn || todayStr}
+          label="Select Check-out Date"
+        />
+        {nights > 0 && (
+          <View style={[styles.nightsSummary, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}>
+            <Text style={[styles.nightsSummaryText, { color: colors.primary }]}>
+              {nights} night{nights !== 1 ? "s" : ""} · ₹{((selectedRoom?.pricePerNight || 0) * nights).toLocaleString("en-IN")} total
+            </Text>
           </View>
-          <View style={{ width: 12 }} />
-          <View style={styles.flex1}>
-            <Text style={styles.label}>Check-Out Date *</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              value={form.checkOut}
-              onChangeText={text => setForm({ ...form, checkOut: formatDate(text) })}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.mutedForeground}
-              keyboardType="numeric"
-              maxLength={10}
-            />
-          </View>
-        </View>
+        )}
 
         <Text style={styles.label}>Number of Guests</Text>
         <TextInput
@@ -330,6 +329,8 @@ const styles = StyleSheet.create({
   summaryDivider: { height: 1, marginVertical: 8 },
   summaryTotal: { fontSize: 15, fontWeight: "800" },
   summaryTotalValue: { fontSize: 18, fontWeight: "800" },
+  nightsSummary: { padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 16, alignItems: "center" },
+  nightsSummaryText: { fontSize: 14, fontWeight: "700" },
   submitButton: { height: 56, borderRadius: 14, justifyContent: "center", alignItems: "center", marginTop: 8 },
   submitInner: { flexDirection: "row", alignItems: "center", gap: 8 },
   submitButtonText: { color: "#fff", fontSize: 17, fontWeight: "700" },

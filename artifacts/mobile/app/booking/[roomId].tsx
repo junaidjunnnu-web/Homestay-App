@@ -2,22 +2,29 @@ import {
   ActivityIndicator,
   Alert,
   Clipboard,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
-  Linking,
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCreateBooking, useGetRoom, useGetProperty } from "@workspace/api-client-react";
+import { useCreateBooking, useGetProperty, useGetRoom } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
-import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import DatePicker from "@/components/DatePicker";
+
+function calcNights(checkIn: string, checkOut: string): number {
+  if (!checkIn || !checkOut) return 0;
+  const a = new Date(checkIn + "T00:00:00");
+  const b = new Date(checkOut + "T00:00:00");
+  return Math.max(0, Math.ceil((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)));
+}
 
 export default function BookingScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
@@ -27,30 +34,40 @@ export default function BookingScreen() {
   const { user } = useAuth();
 
   const { data: room, isLoading: isLoadingRoom } = useGetRoom(roomId!);
-  const { data: property } = useGetProperty(room?.propertyId || "", { query: { enabled: !!room?.propertyId } as any });
+  const { data: property } = useGetProperty(room?.propertyId || "", {
+    query: { enabled: !!room?.propertyId } as any,
+  });
   const { mutate: createBooking, isPending } = useCreateBooking();
 
   const [form, setForm] = useState({
     checkIn: "",
     checkOut: "",
-    guestCount: "1",
+    guestCount: "2",
     guestName: user?.name || "",
     guestEmail: user?.email || "",
     guestMobile: user?.mobile || "",
     specialRequests: "",
   });
 
-  const [successData, setSuccessData] = useState<{ referenceNumber: string } | null>(null);
+  const [successData, setSuccessData] = useState<{
+    referenceNumber: string;
+    totalAmount: number;
+  } | null>(null);
 
-  const calculateTotal = () => {
-    if (!room) return 0;
-    const nights = 2; // In real app, calculate from dates
-    return nights * room.pricePerNight;
-  };
+  const nights = useMemo(() => calcNights(form.checkIn, form.checkOut), [form.checkIn, form.checkOut]);
+  const totalAmount = nights * (room?.pricePerNight || 0);
 
   const handleBooking = () => {
-    if (!form.checkIn || !form.checkOut || !form.guestName || !form.guestEmail || !form.guestMobile) {
-      Alert.alert("Missing Information", "Please fill in all required fields.");
+    if (!form.checkIn || !form.checkOut) {
+      Alert.alert("Select Dates", "Please pick your check-in and check-out dates.");
+      return;
+    }
+    if (nights <= 0) {
+      Alert.alert("Invalid Dates", "Check-out must be after check-in.");
+      return;
+    }
+    if (!form.guestName || !form.guestEmail || !form.guestMobile) {
+      Alert.alert("Missing Info", "Please enter your name, email, and mobile number.");
       return;
     }
 
@@ -60,20 +77,22 @@ export default function BookingScreen() {
           roomId: roomId!,
           checkIn: form.checkIn,
           checkOut: form.checkOut,
-          guestCount: parseInt(form.guestCount),
+          guestCount: parseInt(form.guestCount) || 1,
           guestName: form.guestName,
           guestEmail: form.guestEmail,
           guestMobile: form.guestMobile,
-          specialRequests: form.specialRequests,
+          specialRequests: form.specialRequests || undefined,
           guestId: user?.id,
         },
       },
       {
         onSuccess: (data) => {
-          setSuccessData(data);
+          setSuccessData({ referenceNumber: data.referenceNumber, totalAmount: data.totalAmount });
         },
         onError: (error: any) => {
-          Alert.alert("Booking Failed", error.message || "Something went wrong.");
+          const msg =
+            error?.data?.message || error?.message || "Something went wrong. Please try again.";
+          Alert.alert("Booking Failed", msg);
         },
       }
     );
@@ -82,21 +101,20 @@ export default function BookingScreen() {
   const copyReference = () => {
     if (successData) {
       Clipboard.setString(successData.referenceNumber);
-      Alert.alert("Copied", "Reference number copied to clipboard.");
+      Alert.alert("Copied!", "Booking reference copied to clipboard.");
     }
   };
 
   const openUPI = () => {
     if (!successData || !property?.upiId) return;
-    const upiUrl = `upi://pay?pa=${property.upiId}&pn=${encodeURIComponent(property.name)}&am=${calculateTotal()}&tn=Booking%20${successData.referenceNumber}&cu=INR`;
+    const upiUrl = `upi://pay?pa=${property.upiId}&pn=${encodeURIComponent(property.name)}&am=${successData.totalAmount}&tn=Booking%20${successData.referenceNumber}&cu=INR`;
     Linking.openURL(upiUrl);
   };
 
   const shareWhatsApp = () => {
     if (!successData) return;
-    const text = `Booking Confirmed!\nProperty: ${property?.name}\nReference: ${successData.referenceNumber}\nAmount: ₹${calculateTotal()}`;
-    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    Linking.openURL(url);
+    const text = `🏡 Booking Confirmed!\nProperty: ${property?.name}\nRef: ${successData.referenceNumber}\nCheck-in: ${form.checkIn}\nCheck-out: ${form.checkOut}\n${nights} night${nights !== 1 ? "s" : ""}\nTotal: ₹${successData.totalAmount.toLocaleString("en-IN")}`;
+    Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`);
   };
 
   if (isLoadingRoom) {
@@ -107,210 +125,381 @@ export default function BookingScreen() {
     );
   }
 
+  // ── SUCCESS SCREEN ──
   if (successData) {
     return (
       <View style={[styles.successContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <View style={styles.successContent}>
-          <View style={[styles.successIcon, { backgroundColor: colors.success }]}>
-            <Ionicons name="checkmark" size={60} color="#fff" />
+        <ScrollView contentContainerStyle={styles.successContent} showsVerticalScrollIndicator={false}>
+          <View style={[styles.successIconWrap, { backgroundColor: "#E8F5E9" }]}>
+            <Ionicons name="checkmark-circle" size={80} color="#10B981" />
           </View>
-          <Text style={styles.successTitle}>Booking Confirmed!</Text>
-          <Text style={styles.successSub}>Your stay at {property?.name} is booked.</Text>
-          
-          <View style={[styles.referenceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={styles.referenceLabel}>Booking Reference</Text>
-            <Text style={[styles.referenceValue, { color: colors.primary }]}>{successData.referenceNumber}</Text>
-            <Pressable style={styles.copyButton} onPress={copyReference}>
+          <Text style={styles.successTitle}>Booking Confirmed! 🎉</Text>
+          <Text style={styles.successSub}>Your stay at {property?.name} is all set.</Text>
+
+          <View style={[styles.refCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={styles.refCardLabel}>Booking Reference</Text>
+            <Text style={[styles.refCardValue, { color: colors.primary }]}>{successData.referenceNumber}</Text>
+            <Pressable style={styles.copyBtn} onPress={copyReference}>
               <Feather name="copy" size={16} color={colors.primary} />
-              <Text style={[styles.copyText, { color: colors.primary }]}>Copy</Text>
+              <Text style={[styles.copyText, { color: colors.primary }]}>Copy Reference</Text>
             </Pressable>
+          </View>
+
+          <View style={[styles.stayCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {[
+              { l: "Room", v: room?.name },
+              { l: "Check-in", v: form.checkIn },
+              { l: "Check-out", v: form.checkOut },
+              { l: `${nights} night${nights !== 1 ? "s" : ""}`, v: `₹${successData.totalAmount.toLocaleString("en-IN")}` },
+            ].map(({ l, v }, i) => (
+              <View key={i} style={[styles.stayRow, i > 0 && { borderTopWidth: 1, borderColor: colors.border + "60" }]}>
+                <Text style={styles.stayLabel}>{l}</Text>
+                <Text style={styles.stayValue}>{v}</Text>
+              </View>
+            ))}
           </View>
 
           <View style={styles.successActions}>
             {property?.upiId && (
-              <Pressable style={[styles.paymentBtn, { backgroundColor: colors.primary }]} onPress={openUPI}>
+              <Pressable style={[styles.upiBtn, { backgroundColor: colors.primary }]} onPress={openUPI}>
                 <Ionicons name="qr-code" size={20} color="#fff" />
-                <Text style={styles.paymentBtnText}>Pay via UPI</Text>
+                <Text style={styles.upiBtnText}>Pay ₹{successData.totalAmount.toLocaleString("en-IN")} via UPI</Text>
               </Pressable>
             )}
-            <Pressable style={[styles.shareBtn, { borderColor: "#25D366" }]} onPress={shareWhatsApp}>
-              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
-              <Text style={[styles.shareBtnText, { color: "#25D366" }]}>Share on WhatsApp</Text>
+            <Pressable style={styles.waBtn} onPress={shareWhatsApp}>
+              <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+              <Text style={styles.waBtnText}>Share via WhatsApp</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.doneBtn, { borderColor: colors.border }]}
+              onPress={() => router.replace("/(tabs)")}
+            >
+              <Text style={[styles.doneBtnText, { color: colors.foreground }]}>Back to Home</Text>
             </Pressable>
           </View>
-
-          <Pressable
-            style={[styles.doneButton, { backgroundColor: colors.muted }]}
-            onPress={() => router.replace("/(tabs)")}
-          >
-            <Text style={[styles.doneButtonText, { color: colors.foreground }]}>Go to Home</Text>
-          </Pressable>
-        </View>
+          <View style={{ height: 50 }} />
+        </ScrollView>
       </View>
     );
   }
 
+  // ── BOOKING FORM ──
+  const todayStr = new Date().toISOString().split("T")[0]!;
+
   return (
-    <KeyboardAwareScrollViewCompat style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: colors.primary }]}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color="#000" />
+          <Ionicons name="arrow-back" size={24} color="#fff" />
         </Pressable>
-        <Text style={styles.headerTitle}>Confirm Booking</Text>
+        <Text style={styles.headerTitle}>Book Your Stay</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.content}>
-        <View style={[styles.roomSummary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={styles.summaryTitle}>{room?.name}</Text>
-          <Text style={styles.summarySub}>{room?.type} • ₹{room?.pricePerNight.toLocaleString("en-IN")}/night</Text>
-        </View>
-
-        <View style={styles.formSection}>
-          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Stay Dates</Text>
-          <View style={styles.row}>
-            <View style={styles.flex1}>
-              <Text style={styles.label}>Check-in</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                placeholder="YYYY-MM-DD"
-                value={form.checkIn}
-                onChangeText={(text) => setForm({ ...form, checkIn: text })}
-              />
-            </View>
-            <View style={{ width: 16 }} />
-            <View style={styles.flex1}>
-              <Text style={styles.label}>Check-out</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                placeholder="YYYY-MM-DD"
-                value={form.checkOut}
-                onChangeText={(text) => setForm({ ...form, checkOut: text })}
-              />
-            </View>
+        {/* Room summary */}
+        <View style={[styles.roomCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.roomIcon, { backgroundColor: colors.primary + "15" }]}>
+            <Feather name="home" size={26} color={colors.primary} />
+          </View>
+          <View style={styles.roomInfo}>
+            <Text style={styles.roomName}>{room?.name}</Text>
+            <Text style={styles.roomMeta}>{room?.type} · Max {room?.capacity} guests</Text>
+            <Text style={[styles.roomPrice, { color: colors.primary }]}>
+              ₹{room?.pricePerNight.toLocaleString("en-IN")}/night
+            </Text>
           </View>
         </View>
 
-        <View style={styles.formSection}>
-          <Text style={[styles.sectionTitle, { color: colors.primary }]}>Guest Details</Text>
-          <Text style={styles.label}>Number of Guests</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            keyboardType="number-pad"
-            value={form.guestCount}
-            onChangeText={(text) => setForm({ ...form, guestCount: text })}
-          />
+        {/* Date Section */}
+        <Text style={styles.sectionLabel}>SELECT DATES</Text>
 
-          <Text style={styles.label}>Full Name</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            placeholder="John Doe"
-            value={form.guestName}
-            onChangeText={(text) => setForm({ ...form, guestName: text })}
-          />
+        <Text style={styles.fieldLabel}>Check-in Date</Text>
+        <DatePicker
+          value={form.checkIn}
+          onChange={(date) =>
+            setForm((prev) => ({
+              ...prev,
+              checkIn: date,
+              checkOut: prev.checkOut && prev.checkOut <= date ? "" : prev.checkOut,
+            }))
+          }
+          placeholder="Tap to select check-in"
+          minDate={todayStr}
+          label="Select Check-in Date"
+        />
 
-          <Text style={styles.label}>Email Address</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            placeholder="john@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={form.guestEmail}
-            onChangeText={(text) => setForm({ ...form, guestEmail: text })}
-          />
+        <Text style={styles.fieldLabel}>Check-out Date</Text>
+        <DatePicker
+          value={form.checkOut}
+          onChange={(date) => setForm((prev) => ({ ...prev, checkOut: date }))}
+          placeholder="Tap to select check-out"
+          minDate={form.checkIn || todayStr}
+          label="Select Check-out Date"
+        />
 
-          <Text style={styles.label}>Mobile Number</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            placeholder="9876543210"
-            keyboardType="phone-pad"
-            value={form.guestMobile}
-            onChangeText={(text) => setForm({ ...form, guestMobile: text })}
-          />
+        {/* Live price */}
+        {nights > 0 && (
+          <View style={[styles.priceBox, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}>
+            <Feather name="moon" size={16} color={colors.primary} />
+            <Text style={styles.priceCalc}>
+              ₹{room?.pricePerNight.toLocaleString("en-IN")} × {nights} night{nights !== 1 ? "s" : ""}
+            </Text>
+            <Text style={[styles.priceTotal, { color: colors.primary }]}>
+              ₹{totalAmount.toLocaleString("en-IN")}
+            </Text>
+          </View>
+        )}
 
-          <Text style={styles.label}>Special Requests (Optional)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            placeholder="Any extra requirements?"
-            multiline
-            numberOfLines={3}
-            value={form.specialRequests}
-            onChangeText={(text) => setForm({ ...form, specialRequests: text })}
-          />
+        {/* Guest count */}
+        <Text style={styles.sectionLabel}>NUMBER OF GUESTS</Text>
+        <View style={styles.countRow}>
+          {["1", "2", "3", "4", "5+"].map((n) => (
+            <Pressable
+              key={n}
+              style={[
+                styles.countBtn,
+                { borderColor: colors.border, backgroundColor: colors.surface },
+                form.guestCount === n && { backgroundColor: colors.primary, borderColor: colors.primary },
+              ]}
+              onPress={() => setForm((p) => ({ ...p, guestCount: n }))}
+            >
+              <Text style={[styles.countBtnText, form.guestCount === n && { color: "#fff" }]}>{n}</Text>
+            </Pressable>
+          ))}
         </View>
 
-        <View style={[styles.priceBreakdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={styles.breakdownTitle}>Price Breakdown</Text>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>₹{room?.pricePerNight.toLocaleString("en-IN")} x 2 nights</Text>
-            <Text style={styles.priceValue}>₹{calculateTotal().toLocaleString("en-IN")}</Text>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.priceRow}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={[styles.totalValue, { color: colors.primary }]}>₹{calculateTotal().toLocaleString("en-IN")}</Text>
-          </View>
-        </View>
+        {/* Guest Details */}
+        <Text style={styles.sectionLabel}>YOUR DETAILS</Text>
 
+        <Text style={styles.fieldLabel}>Full Name *</Text>
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          value={form.guestName}
+          onChangeText={(t) => setForm((p) => ({ ...p, guestName: t }))}
+          placeholder="Your full name"
+          placeholderTextColor={colors.mutedForeground}
+        />
+
+        <Text style={styles.fieldLabel}>Email Address *</Text>
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          value={form.guestEmail}
+          onChangeText={(t) => setForm((p) => ({ ...p, guestEmail: t }))}
+          placeholder="you@example.com"
+          placeholderTextColor={colors.mutedForeground}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+
+        <Text style={styles.fieldLabel}>Mobile / WhatsApp *</Text>
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          value={form.guestMobile}
+          onChangeText={(t) => setForm((p) => ({ ...p, guestMobile: t }))}
+          placeholder="10-digit mobile number"
+          placeholderTextColor={colors.mutedForeground}
+          keyboardType="phone-pad"
+          maxLength={10}
+        />
+
+        <Text style={styles.fieldLabel}>Special Requests (optional)</Text>
+        <TextInput
+          style={[styles.input, styles.textarea, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          value={form.specialRequests}
+          onChangeText={(t) => setForm((p) => ({ ...p, specialRequests: t }))}
+          multiline
+          placeholder="Early check-in, vegetarian meals, room on ground floor..."
+          placeholderTextColor={colors.mutedForeground}
+        />
+
+        {/* Confirm */}
         <Pressable
-          style={[styles.submitButton, { backgroundColor: colors.primary }, isPending && { opacity: 0.7 }]}
+          style={[styles.confirmBtn, { backgroundColor: colors.primary }, isPending && { opacity: 0.65 }]}
           onPress={handleBooking}
           disabled={isPending}
         >
           {isPending ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.submitButtonText}>Confirm and Book</Text>
+            <View style={styles.confirmInner}>
+              <Feather name="check-circle" size={20} color="#fff" />
+              <Text style={styles.confirmText}>
+                {nights > 0
+                  ? `Confirm Booking · ₹${totalAmount.toLocaleString("en-IN")}`
+                  : "Confirm Booking"}
+              </Text>
+            </View>
           )}
         </Pressable>
-        <View style={{ height: 40 }} />
+
+        <Text style={styles.policyNote}>
+          {property?.bookingMode === "instant"
+            ? "⚡ Instant confirmation — your room is reserved immediately."
+            : "📋 Inquiry mode — the host will confirm within 24 hours."}
+        </Text>
+
+        <View style={{ height: 80 }} />
       </View>
-    </KeyboardAwareScrollViewCompat>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 16 },
+
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
   backButton: { padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: "700" },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: "#fff" },
+
   content: { padding: 20 },
-  roomSummary: { padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 24 },
-  summaryTitle: { fontSize: 18, fontWeight: "700", marginBottom: 4 },
-  summarySub: { fontSize: 14, color: "#666" },
-  formSection: { marginBottom: 24 },
-  sectionTitle: { fontSize: 16, fontWeight: "700", marginBottom: 16 },
-  row: { flexDirection: "row" },
-  flex1: { flex: 1 },
-  label: { fontSize: 14, fontWeight: "500", marginBottom: 8, color: "#444" },
-  input: { height: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, fontSize: 16, marginBottom: 16 },
-  textArea: { height: 100, paddingTop: 12, textAlignVertical: "top" },
-  priceBreakdown: { padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 32 },
-  breakdownTitle: { fontSize: 16, fontWeight: "700", marginBottom: 12 },
-  priceRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  priceLabel: { fontSize: 14, color: "#666" },
-  priceValue: { fontSize: 14, fontWeight: "600" },
-  divider: { height: 1, backgroundColor: "#eee", marginVertical: 12 },
-  totalLabel: { fontSize: 16, fontWeight: "700" },
-  totalValue: { fontSize: 18, fontWeight: "700" },
-  submitButton: { height: 56, borderRadius: 12, justifyContent: "center", alignItems: "center" },
-  submitButtonText: { color: "#fff", fontSize: 18, fontWeight: "700" },
+
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#8A7A6E",
+    letterSpacing: 1.2,
+    marginBottom: 12,
+    marginTop: 24,
+  },
+  fieldLabel: { fontSize: 14, fontWeight: "600", color: "#444", marginBottom: 6 },
+
+  roomCard: {
+    flexDirection: "row",
+    gap: 14,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  roomIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  roomInfo: { flex: 1 },
+  roomName: { fontSize: 17, fontWeight: "800", marginBottom: 2 },
+  roomMeta: { fontSize: 12, color: "#8A7A6E", marginBottom: 4 },
+  roomPrice: { fontSize: 16, fontWeight: "800" },
+
+  priceBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  priceCalc: { flex: 1, fontSize: 14, color: "#555" },
+  priceTotal: { fontSize: 20, fontWeight: "900" },
+
+  countRow: { flexDirection: "row", gap: 10, marginBottom: 4 },
+  countBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  countBtnText: { fontSize: 16, fontWeight: "700" },
+
+  input: {
+    height: 48,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    marginBottom: 16,
+  },
+  textarea: { height: 90, paddingTop: 12, textAlignVertical: "top" },
+
+  confirmBtn: {
+    height: 58,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  confirmInner: { flexDirection: "row", alignItems: "center", gap: 10 },
+  confirmText: { color: "#fff", fontSize: 17, fontWeight: "800" },
+  policyNote: { fontSize: 12, color: "#8A7A6E", textAlign: "center", marginTop: 12, lineHeight: 20 },
+
+  // Success
   successContainer: { flex: 1 },
-  successContent: { flex: 1, alignItems: "center", justifyContent: "center", padding: 30 },
-  successIcon: { width: 100, height: 100, borderRadius: 50, justifyContent: "center", alignItems: "center", marginBottom: 24 },
-  successTitle: { fontSize: 24, fontWeight: "700", marginBottom: 8 },
-  successSub: { fontSize: 16, color: "#666", textAlign: "center", marginBottom: 32 },
-  referenceCard: { width: "100%", padding: 20, borderRadius: 16, borderWidth: 1, alignItems: "center", marginBottom: 24 },
-  referenceLabel: { fontSize: 12, color: "#999", textTransform: "uppercase", marginBottom: 8 },
-  referenceValue: { fontSize: 28, fontWeight: "800", letterSpacing: 1, marginBottom: 16 },
-  copyButton: { flexDirection: "row", alignItems: "center", gap: 6 },
-  copyText: { fontWeight: "600" },
-  successActions: { width: "100%", gap: 12, marginBottom: 24 },
-  paymentBtn: { height: 56, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
-  paymentBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  shareBtn: { height: 56, borderRadius: 12, borderWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
-  shareBtnText: { fontSize: 16, fontWeight: "700" },
-  doneButton: { width: "100%", height: 56, borderRadius: 12, justifyContent: "center", alignItems: "center" },
-  doneButtonText: { fontSize: 16, fontWeight: "700" },
+  successContent: { padding: 24, alignItems: "center" },
+  successIconWrap: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  successTitle: { fontSize: 24, fontWeight: "800", textAlign: "center", marginBottom: 8 },
+  successSub: { fontSize: 14, color: "#8A7A6E", textAlign: "center", marginBottom: 24 },
+  refCard: {
+    width: "100%",
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  refCardLabel: { fontSize: 11, color: "#8A7A6E", fontWeight: "800", letterSpacing: 1, marginBottom: 8 },
+  refCardValue: { fontSize: 30, fontWeight: "900", letterSpacing: 2, marginBottom: 12 },
+  copyBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
+  copyText: { fontSize: 14, fontWeight: "700" },
+  stayCard: {
+    width: "100%",
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 24,
+    overflow: "hidden",
+  },
+  stayRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 12, paddingHorizontal: 16 },
+  stayLabel: { fontSize: 13, color: "#8A7A6E" },
+  stayValue: { fontSize: 14, fontWeight: "700" },
+  successActions: { width: "100%", gap: 12 },
+  upiBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 14,
+  },
+  upiBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  waBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 14,
+    backgroundColor: "#25D366",
+  },
+  waBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  doneBtn: {
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    borderWidth: 1,
+  },
+  doneBtnText: { fontSize: 16, fontWeight: "700" },
 });

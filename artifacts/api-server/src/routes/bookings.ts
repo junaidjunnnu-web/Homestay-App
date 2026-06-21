@@ -47,9 +47,40 @@ router.post("/bookings", async (req, res) => {
       return;
     }
 
-    // Calculate nights and total
+    // Validate dates
     const checkInDate = new Date(checkIn);
     const checkOutDate = new Date(checkOut);
+    if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+      res.status(400).json({ error: "validation", message: "Invalid date format. Use YYYY-MM-DD." });
+      return;
+    }
+    if (checkOutDate <= checkInDate) {
+      res.status(400).json({ error: "validation", message: "Check-out must be after check-in." });
+      return;
+    }
+
+    // Double booking prevention: check for overlapping confirmed/pending bookings
+    const overlapping = await db
+      .select({ id: bookingsTable.id })
+      .from(bookingsTable)
+      .where(
+        and(
+          eq(bookingsTable.roomId, roomId),
+          sql`${bookingsTable.status} != 'cancelled'`,
+          sql`${bookingsTable.checkIn}::date < ${checkOut}::date`,
+          sql`${bookingsTable.checkOut}::date > ${checkIn}::date`
+        )
+      )
+      .limit(1);
+
+    if (overlapping.length > 0) {
+      res.status(409).json({
+        error: "double_booking",
+        message: "This room is already booked for your selected dates. Please choose different dates.",
+      });
+      return;
+    }
+
     const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
     const totalAmount = nights * room.pricePerNight;
 
