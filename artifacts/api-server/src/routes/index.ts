@@ -9,6 +9,7 @@ import reviewsRouter from "./reviews";
 import roomsRouter from "./rooms";
 import staffRouter from "./staff";
 import uploadRouter from "./upload";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(housekeepingRouter);
 router.use(staffRouter);
 router.use(menuRouter);
 router.use(uploadRouter);
+router.use(storageRouter);
 
 export default router;
