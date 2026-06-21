@@ -1,7 +1,6 @@
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,6 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
@@ -153,7 +153,7 @@ export default function AddPropertyScreen() {
         <View style={styles.photosRow}>
           {form.photos.map((uri, index) => (
             <View key={index} style={styles.photoWrapper}>
-              <Image source={{ uri }} style={styles.photoThumb} />
+              <ExpoImage source={{ uri }} style={styles.photoThumb} contentFit="cover" />
               <Pressable style={styles.removePhotoBtn} onPress={() => removePhoto(index)}>
                 <Ionicons name="close-circle" size={20} color="#E53E3E" />
               </Pressable>

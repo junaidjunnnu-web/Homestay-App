@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 const TOKEN_KEY = "homestay_token";
 
@@ -6,16 +7,27 @@ export async function uploadImage(imageUri: string): Promise<string> {
   const token = await AsyncStorage.getItem(TOKEN_KEY);
   const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
-  const filename = imageUri.split("/").pop() || "photo.jpg";
-  const ext = filename.split(".").pop()?.toLowerCase() || "jpg";
+  const rawFilename = imageUri.split("/").pop()?.split("?")[0] || "photo.jpg";
+  const ext = rawFilename.includes(".") ? (rawFilename.split(".").pop()?.toLowerCase() ?? "jpg") : "jpg";
   const mimeType = ext === "png" ? "image/png" : ext === "gif" ? "image/gif" : "image/jpeg";
+  const safeFilename = `photo.${ext}`;
 
   const formData = new FormData();
-  formData.append("file", {
-    uri: imageUri,
-    name: filename,
-    type: mimeType,
-  } as any);
+
+  if (Platform.OS === "web" || imageUri.startsWith("blob:") || imageUri.startsWith("data:")) {
+    // Web: fetch the blob/data URI and create a proper File object
+    const blobResponse = await fetch(imageUri);
+    const blob = await blobResponse.blob();
+    const file = new File([blob], safeFilename, { type: blob.type || mimeType });
+    formData.append("file", file);
+  } else {
+    // Native (iOS/Android): React Native FormData style
+    formData.append("file", {
+      uri: imageUri,
+      name: safeFilename,
+      type: mimeType,
+    } as any);
+  }
 
   const response = await fetch(`${baseUrl}/api/upload`, {
     method: "POST",
@@ -27,7 +39,7 @@ export async function uploadImage(imageUri: string): Promise<string> {
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(`Upload failed: ${text}`);
+    throw new Error(`Upload failed (${response.status}): ${text}`);
   }
 
   const result = await response.json();
