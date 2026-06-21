@@ -12,7 +12,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useGetHostProperties, useCreateBooking } from "@workspace/api-client-react";
+import { useGetHostProperties, useGetRooms, useCreateBooking } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import DatePicker from "@/components/DatePicker";
 
@@ -36,7 +36,10 @@ export default function AddBookingScreen() {
     specialRequests: "",
   });
 
-  const rooms = selectedProperty?.rooms || [];
+  const { data: rooms = [], isLoading: isLoadingRooms } = useGetRooms(
+    selectedProperty?.id || "",
+    { query: { enabled: !!selectedProperty?.id } } as any
+  );
 
   const handleSubmit = () => {
     if (!selectedProperty || !selectedRoom) {
@@ -123,8 +126,10 @@ export default function AddBookingScreen() {
         {selectedProperty && (
           <>
             <Text style={styles.sectionLabel}>SELECT ROOM</Text>
-            {rooms.length === 0 ? (
-              <Text style={[styles.hint, { color: colors.mutedForeground }]}>No rooms found for this property</Text>
+            {isLoadingRooms ? (
+              <ActivityIndicator color={colors.primary} style={{ marginBottom: 16 }} />
+            ) : rooms.length === 0 ? (
+              <Text style={[styles.hint, { color: colors.mutedForeground }]}>No rooms found — add rooms to this property first</Text>
             ) : (
               <View style={styles.roomsGrid}>
                 {rooms.map((room: any) => (

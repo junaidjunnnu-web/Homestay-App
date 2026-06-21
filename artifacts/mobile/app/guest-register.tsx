@@ -6,6 +6,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -64,9 +65,8 @@ export default function GuestRegisterScreen() {
 
   const whatsappGuest = (mobile: string, name: string) => {
     if (!mobile) return;
-    Linking.openURL(
-      `https://wa.me/91${mobile}?text=${encodeURIComponent(`Hi ${name}, this is regarding your stay with us.`)}`
-    );
+    const msg = `Hi ${name}, this is regarding your stay with us. Please let us know if you need any assistance.`;
+    Linking.openURL(`https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`);
   };
 
   const getStatusColor = (status: string) => {
@@ -83,12 +83,17 @@ export default function GuestRegisterScreen() {
       <View style={styles.cardHeader}>
         <View style={[styles.avatar, { backgroundColor: colors.primary + "20" }]}>
           <Text style={[styles.avatarText, { color: colors.primary }]}>
-            {item.name.charAt(0).toUpperCase()}
+            {(item.name || "G").charAt(0).toUpperCase()}
           </Text>
         </View>
         <View style={styles.guestInfo}>
           <Text style={styles.guestName}>{item.name}</Text>
           {item.email ? <Text style={styles.guestEmail}>{item.email}</Text> : null}
+          {item.mobile ? (
+            <Text style={[styles.guestEmail, { color: colors.mutedForeground }]}>
+              +91 {item.mobile}
+            </Text>
+          ) : null}
           <View style={styles.statsRow}>
             <Text style={styles.statText}>{item.bookings.length} stay{item.bookings.length !== 1 ? "s" : ""}</Text>
             <Text style={styles.statDot}>·</Text>
@@ -97,18 +102,21 @@ export default function GuestRegisterScreen() {
         </View>
       </View>
 
-      {/* Recent bookings */}
       {item.bookings.slice(0, 2).map((b: any) => (
         <View key={b.id} style={[styles.bookingRow, { borderColor: colors.border }]}>
           <Text style={styles.bookingRef}>#{b.referenceNumber}</Text>
-          <Text style={styles.bookingProp} numberOfLines={1}>{b.property?.name}</Text>
+          <View style={styles.bookingMid}>
+            <Text style={styles.bookingProp} numberOfLines={1}>{b.property?.name || b.room?.name || "—"}</Text>
+            <Text style={[styles.bookingDates, { color: colors.mutedForeground }]}>
+              {b.checkIn} → {b.checkOut}
+            </Text>
+          </View>
           <View style={[styles.statusPill, { backgroundColor: getStatusColor(b.status) + "15" }]}>
             <Text style={[styles.statusText, { color: getStatusColor(b.status) }]}>{b.status}</Text>
           </View>
         </View>
       ))}
 
-      {/* Actions */}
       {item.mobile ? (
         <View style={styles.actions}>
           <Pressable
@@ -138,19 +146,27 @@ export default function GuestRegisterScreen() {
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Guest Register</Text>
-          <Text style={styles.headerSub}>{guests.length} unique guests</Text>
+          <Text style={styles.headerSub}>{guests.length} unique guest{guests.length !== 1 ? "s" : ""}</Text>
         </View>
         <View style={{ width: 24 }} />
       </View>
 
       <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Feather name="search" size={18} color={colors.mutedForeground} />
-        <Text
-          style={[styles.searchInput, { color: search ? "#000" : colors.mutedForeground }]}
-          onPress={() => {}}
-        >
-          {search || "Search by name, email or phone..."}
-        </Text>
+        <TextInput
+          style={[styles.searchInput, { color: colors.foreground }]}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search by name, email or phone..."
+          placeholderTextColor={colors.mutedForeground}
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch("")}>
+            <Feather name="x" size={16} color={colors.mutedForeground} />
+          </Pressable>
+        )}
       </View>
 
       <FlatList
@@ -164,8 +180,10 @@ export default function GuestRegisterScreen() {
           ) : (
             <View style={styles.empty}>
               <Feather name="users" size={48} color={colors.mutedForeground} />
-              <Text style={styles.emptyTitle}>No guests yet</Text>
-              <Text style={styles.emptyText}>Guest data appears once bookings are made</Text>
+              <Text style={styles.emptyTitle}>{search ? "No results" : "No guests yet"}</Text>
+              <Text style={styles.emptyText}>
+                {search ? "Try a different search term" : "Guest data appears once bookings are made"}
+              </Text>
             </View>
           )
         }
@@ -194,8 +212,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     margin: 16,
     paddingHorizontal: 14,
-    height: 44,
-    borderRadius: 22,
+    height: 48,
+    borderRadius: 24,
     borderWidth: 1,
     gap: 10,
   },
@@ -213,17 +231,17 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: "row", gap: 12, marginBottom: 12 },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarText: { fontSize: 20, fontWeight: "800" },
+  avatarText: { fontSize: 22, fontWeight: "800" },
   guestInfo: { flex: 1 },
   guestName: { fontSize: 17, fontWeight: "800", marginBottom: 2 },
-  guestEmail: { fontSize: 12, color: "#8A7A6E", marginBottom: 4 },
-  statsRow: { flexDirection: "row", gap: 6, alignItems: "center" },
+  guestEmail: { fontSize: 12, color: "#8A7A6E", marginBottom: 2 },
+  statsRow: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 4 },
   statText: { fontSize: 12, fontWeight: "600", color: "#8A7A6E" },
   statDot: { color: "#8A7A6E" },
   bookingRow: {
@@ -233,8 +251,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: 1,
   },
-  bookingRef: { fontSize: 11, fontWeight: "700", color: "#8A7A6E", width: 50 },
-  bookingProp: { flex: 1, fontSize: 13 },
+  bookingRef: { fontSize: 10, fontWeight: "700", color: "#8A7A6E", width: 55 },
+  bookingMid: { flex: 1 },
+  bookingProp: { fontSize: 13, fontWeight: "600" },
+  bookingDates: { fontSize: 11, marginTop: 1 },
   statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   statusText: { fontSize: 10, fontWeight: "700" },
   actions: { flexDirection: "row", gap: 10, marginTop: 12 },
@@ -244,7 +264,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: 12,
   },
   actionBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },

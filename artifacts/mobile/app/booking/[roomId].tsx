@@ -117,6 +117,13 @@ export default function BookingScreen() {
     Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`);
   };
 
+  const notifyHostWhatsApp = () => {
+    if (!successData || !(property as any)?.phone) return;
+    const hostPhone = (property as any).phone;
+    const msg = `Hi! I just made a booking at ${property?.name}.\n\n📋 Ref: #${successData.referenceNumber}\n👤 Guest: ${form.guestName}\n📱 Mobile: +91${form.guestMobile}\n📅 Check-in: ${form.checkIn}\n📅 Check-out: ${form.checkOut}\n🛏 Room: ${room?.name}\n💰 Total: ₹${successData.totalAmount.toLocaleString("en-IN")}\n\nPlease confirm my booking. Thank you!`;
+    Linking.openURL(`https://wa.me/91${hostPhone}?text=${encodeURIComponent(msg)}`);
+  };
+
   if (isLoadingRoom) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
@@ -166,9 +173,15 @@ export default function BookingScreen() {
                 <Text style={styles.upiBtnText}>Pay ₹{successData.totalAmount.toLocaleString("en-IN")} via UPI</Text>
               </Pressable>
             )}
-            <Pressable style={styles.waBtn} onPress={shareWhatsApp}>
+            {(property as any)?.phone ? (
+              <Pressable style={[styles.waBtn, { backgroundColor: "#25D366" }]} onPress={notifyHostWhatsApp}>
+                <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                <Text style={styles.waBtnText}>Notify Host via WhatsApp</Text>
+              </Pressable>
+            ) : null}
+            <Pressable style={[styles.waBtn, { backgroundColor: "#128C7E" }]} onPress={shareWhatsApp}>
               <Ionicons name="logo-whatsapp" size={20} color="#fff" />
-              <Text style={styles.waBtnText}>Share via WhatsApp</Text>
+              <Text style={styles.waBtnText}>Share Booking Details</Text>
             </Pressable>
             <Pressable
               style={[styles.doneBtn, { borderColor: colors.border }]}
