@@ -166,13 +166,70 @@ export default function BookingScreen() {
             ))}
           </View>
 
-          <View style={styles.successActions}>
-            {property?.upiId && (
-              <Pressable style={[styles.upiBtn, { backgroundColor: colors.primary }]} onPress={openUPI}>
-                <Ionicons name="qr-code" size={20} color="#fff" />
-                <Text style={styles.upiBtnText}>Pay ₹{successData.totalAmount.toLocaleString("en-IN")} via UPI</Text>
+          {/* Payment Options */}
+          <Text style={[styles.payHeader, { color: colors.foreground }]}>Complete Your Payment</Text>
+          <Text style={[styles.paySub, { color: colors.mutedForeground }]}>
+            Choose a payment method for ₹{successData.totalAmount.toLocaleString("en-IN")}
+          </Text>
+
+          {/* UPI Options */}
+          {property?.upiId && (
+            <View style={[styles.paySection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.paySectionHead}>
+                <Ionicons name="qr-code-outline" size={18} color="#6366F1" />
+                <Text style={[styles.paySectionTitle, { color: colors.foreground }]}>Pay via UPI</Text>
+              </View>
+              <Text style={[styles.payUpiId, { color: colors.mutedForeground }]}>UPI ID: {property.upiId}</Text>
+              <View style={styles.upiAppsRow}>
+                {[
+                  { name: "PhonePe", color: "#5F259F", url: `phonepe://pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "📱" },
+                  { name: "GPay", color: "#1A73E8", url: `tez://upi/pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "💳" },
+                  { name: "Paytm", color: "#00BAF2", url: `paytmmp://pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "🅿️" },
+                  { name: "Any UPI", color: "#E8824A", url: `upi://pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "📲" },
+                ].map(app => (
+                  <Pressable
+                    key={app.name}
+                    style={[styles.upiAppBtn, { borderColor: app.color + "50", backgroundColor: app.color + "0F" }]}
+                    onPress={() => Linking.openURL(app.url).catch(() => {})}
+                  >
+                    <Text style={styles.upiAppIcon}>{app.icon}</Text>
+                    <Text style={[styles.upiAppName, { color: app.color }]}>{app.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Bank Transfer */}
+          {(property as any)?.bankDetails && (
+            <View style={[styles.paySection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.paySectionHead}>
+                <Feather name="credit-card" size={18} color="#10B981" />
+                <Text style={[styles.paySectionTitle, { color: colors.foreground }]}>Bank Transfer (NEFT/IMPS)</Text>
+              </View>
+              <Text style={[styles.bankDetailsText, { color: colors.foreground }]}>{(property as any).bankDetails}</Text>
+              <Pressable
+                style={[styles.smallCopyBtn, { borderColor: colors.primary }]}
+                onPress={() => Clipboard.setString((property as any).bankDetails)}
+              >
+                <Feather name="copy" size={13} color={colors.primary} />
+                <Text style={[styles.smallCopyText, { color: colors.primary }]}>Copy Account Details</Text>
               </Pressable>
-            )}
+            </View>
+          )}
+
+          {/* Cash */}
+          <View style={[styles.paySection, { backgroundColor: "#FFF8ED", borderColor: "#F59E0B40" }]}>
+            <View style={styles.paySectionHead}>
+              <Feather name="dollar-sign" size={18} color="#F59E0B" />
+              <Text style={[styles.paySectionTitle, { color: "#92400E" }]}>Pay Cash at Check-in</Text>
+            </View>
+            <Text style={[styles.cashNote, { color: "#78350F" }]}>
+              You can pay ₹{successData.totalAmount.toLocaleString("en-IN")} in cash directly at the property. Please carry exact change.
+            </Text>
+          </View>
+
+          <View style={styles.successActions}>
             {(property as any)?.phone ? (
               <Pressable style={[styles.waBtn, { backgroundColor: "#25D366" }]} onPress={notifyHostWhatsApp}>
                 <Ionicons name="logo-whatsapp" size={20} color="#fff" />
@@ -515,4 +572,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   doneBtnText: { fontSize: 16, fontWeight: "700" },
+  payHeader: { fontSize: 18, fontWeight: "800", marginTop: 20, marginBottom: 4, width: "100%", textAlign: "left" },
+  paySub: { fontSize: 13, marginBottom: 14, width: "100%", textAlign: "left" },
+  paySection: { width: "100%", borderRadius: 16, borderWidth: 1, padding: 14, marginBottom: 12 },
+  paySectionHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  paySectionTitle: { fontSize: 15, fontWeight: "800" },
+  payUpiId: { fontSize: 13, marginBottom: 12 },
+  upiAppsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  upiAppBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 6 },
+  upiAppIcon: { fontSize: 14 },
+  upiAppName: { fontSize: 12, fontWeight: "700" },
+  bankDetailsText: { fontSize: 12, lineHeight: 20, fontFamily: "monospace" },
+  smallCopyBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, marginTop: 8 },
+  smallCopyText: { fontSize: 12, fontWeight: "700" },
+  cashNote: { fontSize: 13, lineHeight: 20 },
 });

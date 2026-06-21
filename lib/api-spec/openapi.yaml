@@ -1010,6 +1010,8 @@ components:
           type: string
         upiId:
           type: string
+        bankDetails:
+          type: string
         bookingMode:
           type: string
           enum: [inquiry, instant]
@@ -1106,6 +1108,8 @@ components:
           type: string
         upiId:
           type: string
+        bankDetails:
+          type: string
         bookingMode:
           type: string
           enum: [inquiry, instant]
@@ -1152,6 +1156,8 @@ components:
         phone:
           type: string
         upiId:
+          type: string
+        bankDetails:
           type: string
         bookingMode:
           type: string

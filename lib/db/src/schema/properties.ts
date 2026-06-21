@@ -19,6 +19,7 @@ export const propertiesTable = pgTable("properties", {
   nearbyAttractions: text("nearby_attractions").array().notNull().default([]),
   phone: text("phone"),
   upiId: text("upi_id"),
+  bankDetails: text("bank_details"),
   bookingMode: text("booking_mode", { enum: ["inquiry", "instant"] }).notNull().default("inquiry"),
   cancellationPolicy: text("cancellation_policy"),
   status: text("status", { enum: ["active", "inactive"] }).notNull().default("active"),

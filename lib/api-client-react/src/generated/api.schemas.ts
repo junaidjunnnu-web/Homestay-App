@@ -94,6 +94,7 @@ export interface Property {
   nearbyAttractions?: string[];
   phone?: string;
   upiId?: string;
+  bankDetails?: string;
   bookingMode: PropertyBookingMode;
   cancellationPolicy?: string;
   status: PropertyStatus;
@@ -169,6 +170,7 @@ export interface CreatePropertyRequest {
   nearbyAttractions?: string[];
   phone?: string;
   upiId?: string;
+  bankDetails?: string;
   bookingMode: CreatePropertyRequestBookingMode;
   cancellationPolicy?: string;
 }
@@ -203,6 +205,7 @@ export interface UpdatePropertyRequest {
   nearbyAttractions?: string[];
   phone?: string;
   upiId?: string;
+  bankDetails?: string;
   bookingMode?: UpdatePropertyRequestBookingMode;
   cancellationPolicy?: string;
   status?: UpdatePropertyRequestStatus;

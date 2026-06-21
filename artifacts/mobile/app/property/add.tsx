@@ -316,7 +316,8 @@ export default function AddPropertyScreen() {
         </View>
 
         {/* Payment */}
-        <Text style={styles.sectionLabel}>PAYMENT</Text>
+        <Text style={styles.sectionLabel}>PAYMENT SETTINGS</Text>
+
         <Text style={styles.label}>UPI ID (for guest payments)</Text>
         <View style={[styles.inputWithIcon, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Feather name="credit-card" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
@@ -324,11 +325,27 @@ export default function AddPropertyScreen() {
             style={styles.inputInner}
             value={form.upiId}
             onChangeText={text => setForm({ ...form, upiId: text })}
-            placeholder="e.g. owner@upi"
+            placeholder="e.g. yourname@paytm or 9876543210@upi"
             placeholderTextColor={colors.mutedForeground}
             autoCapitalize="none"
           />
         </View>
+        <Text style={[styles.sublabel, { marginTop: -8, marginBottom: 16 }]}>
+          Guests can pay via PhonePe, GPay, Paytm, or any UPI app
+        </Text>
+
+        <Text style={styles.label}>Bank Account Details (for NEFT/IMPS transfers)</Text>
+        <TextInput
+          style={[styles.input, styles.textArea, { height: 110, backgroundColor: colors.surface, borderColor: colors.border }]}
+          value={(form as any).bankDetails || ""}
+          onChangeText={text => setForm({ ...form, bankDetails: text } as any)}
+          multiline
+          placeholder={"Account Holder: Your Name\nAccount No: 1234567890\nIFSC: SBIN0001234\nBank: State Bank of India\nBranch: Coorg Main"}
+          placeholderTextColor={colors.mutedForeground}
+        />
+        <Text style={[styles.sublabel, { marginTop: -8, marginBottom: 16 }]}>
+          Shown to guests as an alternative payment method
+        </Text>
 
         <Pressable
           style={[styles.submitButton, { backgroundColor: colors.primary }, isBusy && { opacity: 0.7 }]}
