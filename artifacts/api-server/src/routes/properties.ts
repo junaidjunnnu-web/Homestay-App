@@ -160,7 +160,7 @@ router.get("/properties/:propertyId", async (req, res) => {
 router.post("/properties", requireHost, async (req, res) => {
   const user = (req as typeof req & { user: { id: string } }).user;
   try {
-    const { name, address, city, state, bookingMode, photos, description, amenities, mealsIncluded, locationLat, locationLng, nearbyAttractions, upiId, cancellationPolicy } = req.body;
+    const { name, address, city, state, bookingMode, photos, description, amenities, mealsIncluded, locationLat, locationLng, nearbyAttractions, upiId, cancellationPolicy, phone } = req.body;
     if (!name || !address || !city || !state || !bookingMode) {
       res.status(400).json({ error: "validation", message: "name, address, city, state, bookingMode required" });
       return;
@@ -181,6 +181,7 @@ router.post("/properties", requireHost, async (req, res) => {
       nearbyAttractions: nearbyAttractions || [],
       upiId: upiId || null,
       cancellationPolicy: cancellationPolicy || null,
+      phone: phone || null,
     }).returning();
     res.status(201).json({ ...property, createdAt: property.createdAt.toISOString() });
   } catch (err) {
@@ -204,7 +205,7 @@ router.put("/properties/:propertyId", requireAuth, async (req, res) => {
       return;
     }
     const updates: Partial<typeof propertiesTable.$inferInsert> = {};
-    const fields = ["name", "address", "city", "state", "bookingMode", "photos", "description", "amenities", "mealsIncluded", "locationLat", "locationLng", "nearbyAttractions", "upiId", "cancellationPolicy", "status"] as const;
+    const fields = ["name", "address", "city", "state", "bookingMode", "photos", "description", "amenities", "mealsIncluded", "locationLat", "locationLng", "nearbyAttractions", "upiId", "cancellationPolicy", "status", "phone"] as const;
     for (const f of fields) {
       if (req.body[f] !== undefined) (updates as Record<string, unknown>)[f] = req.body[f];
     }

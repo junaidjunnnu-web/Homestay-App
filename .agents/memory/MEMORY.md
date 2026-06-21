@@ -1,0 +1,1 @@
+- [Booking creation API](booking-api-tip.md) — useCreateBooking takes {data} only; no propertyId in URL (/bookings, not /properties/:id/bookings)

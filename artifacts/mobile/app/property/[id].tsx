@@ -57,13 +57,17 @@ export default function PropertyDetailScreen() {
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
   };
 
+  const contactPhone = (property as any).phone || property.host?.mobile;
+
   const openWhatsApp = () => {
-    const url = `https://wa.me/91${property.host?.mobile}?text=${encodeURIComponent(`Hi, I'm interested in booking ${property.name}`)}`;
+    if (!contactPhone) { return; }
+    const url = `https://wa.me/91${contactPhone}?text=${encodeURIComponent(`Hi! I found your property "${property.name}" on Homestay App and I'm interested in booking. Could you please share availability and rates?`)}`;
     Linking.openURL(url);
   };
 
   const openCall = () => {
-    Linking.openURL(`tel:+91${property.host?.mobile}`);
+    if (!contactPhone) { return; }
+    Linking.openURL(`tel:+91${contactPhone}`);
   };
 
   const filteredMenu = menuItems

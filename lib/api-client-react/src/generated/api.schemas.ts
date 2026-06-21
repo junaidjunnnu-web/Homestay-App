@@ -92,6 +92,7 @@ export interface Property {
   locationLat?: number;
   locationLng?: number;
   nearbyAttractions?: string[];
+  phone?: string;
   upiId?: string;
   bookingMode: PropertyBookingMode;
   cancellationPolicy?: string;
@@ -166,6 +167,7 @@ export interface CreatePropertyRequest {
   locationLat?: number;
   locationLng?: number;
   nearbyAttractions?: string[];
+  phone?: string;
   upiId?: string;
   bookingMode: CreatePropertyRequestBookingMode;
   cancellationPolicy?: string;
@@ -199,6 +201,7 @@ export interface UpdatePropertyRequest {
   locationLat?: number;
   locationLng?: number;
   nearbyAttractions?: string[];
+  phone?: string;
   upiId?: string;
   bookingMode?: UpdatePropertyRequestBookingMode;
   cancellationPolicy?: string;
