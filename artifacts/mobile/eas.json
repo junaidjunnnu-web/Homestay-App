@@ -8,6 +8,9 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "homestay-booking--junaid001.replit.app"
       }
     },
     "preview-ios": {

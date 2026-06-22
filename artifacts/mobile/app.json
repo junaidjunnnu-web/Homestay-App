@@ -39,7 +39,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://homestay-booking--junaid001.replit.app"
         }
       ],
       "expo-font",
