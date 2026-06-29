@@ -6,3 +6,5 @@ export * from "./reviews";
 export * from "./housekeeping";
 export * from "./staff";
 export * from "./menu";
+export * from "./paymentSettings";
+export * from "./transactions";

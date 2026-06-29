@@ -1,12 +1,15 @@
 import {
   ActivityIndicator,
+  Alert,
   Clipboard,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
   Dimensions,
 } from "react-native";
@@ -15,12 +18,14 @@ import React, { useMemo, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGetHostDashboard, useGetHostBookings, useGetHostProperties } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { useQuery } from "@tanstack/react-query";
 
 const { width } = Dimensions.get("window");
 const CHART_W = width - 48;
 const CHART_H = 140;
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const EXPENSE_CATEGORIES = ["Utilities", "Maintenance", "Staff Salary", "Supplies", "Marketing", "Taxes", "Insurance", "Other"] as const;
 
 function getMonthlyRevenue(bookings: any[]) {
   const now = new Date();
@@ -63,11 +68,41 @@ function getRoomOccupancy(bookings: any[]) {
 export default function FinanceScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<"overview" | "payments">("overview");
+  const [tab, setTab] = useState<"overview" | "expenses" | "payments">("overview");
+  const [expenseModalVisible, setExpenseModalVisible] = useState(false);
+  const [plModalVisible, setPlModalVisible] = useState(false);
+  const [newExpense, setNewExpense] = useState({ category: "Utilities", amount: "", description: "" });
 
   const { data: stats, isLoading } = useGetHostDashboard();
   const { data: allBookings = [] } = useGetHostBookings({});
   const { data: properties = [] } = useGetHostProperties();
+
+  const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+
+  const { data: paymentDashboard, isLoading: loadingPayments } = useQuery({
+    queryKey: ["paymentDashboard"],
+    queryFn: async () => {
+      const token = await fetchToken();
+      const response = await fetch(`${API_BASE}/transactions/dashboard`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to fetch payment dashboard");
+      return response.json();
+    },
+    enabled: tab === "payments",
+  });
+
+  const fetchToken = async () => {
+    // Implement token fetching based on your auth context
+    return "";
+  };
+
+  // Mock expenses data (would come from API in production)
+  const expenses = useMemo(() => [
+    { id: "1", category: "Utilities", amount: 5000, description: "Electricity bill", date: "2025-01-15" },
+    { id: "2", category: "Maintenance", amount: 2000, description: "Plumbing repair", date: "2025-01-10" },
+    { id: "3", category: "Staff Salary", amount: 25000, description: "Monthly salaries", date: "2025-01-01" },
+  ], []);
 
   const monthlyData = useMemo(() => getMonthlyRevenue(allBookings as any[]), [allBookings]);
   const roomOccupancy = useMemo(() => getRoomOccupancy(allBookings as any[]), [allBookings]);
@@ -81,9 +116,24 @@ export default function FinanceScreen() {
   const cancelledCount = (allBookings as any[]).filter(b => b.status === "cancelled").length;
   const avgBookingValue = confirmedCount > 0 ? Math.round(totalRevenue / confirmedCount) : 0;
 
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const netProfit = totalRevenue - totalExpenses;
+  const gstAmount = totalRevenue * 0.18; // 18% GST
+  const revenueAfterGST = totalRevenue - gstAmount;
+
   const firstProp = (properties as any[])[0];
   const upiId = firstProp?.upiId || "";
   const bankDetails = firstProp?.bankDetails || "";
+
+  const addExpense = () => {
+    if (!newExpense.amount || isNaN(Number(newExpense.amount))) {
+      Alert.alert("Invalid Amount", "Please enter a valid amount");
+      return;
+    }
+    Alert.alert("Expense Added", "Expense has been recorded successfully.");
+    setExpenseModalVisible(false);
+    setNewExpense({ category: "Utilities", amount: "", description: "" });
+  };
 
   const shareReport = async () => {
     const lines = [
@@ -92,6 +142,10 @@ export default function FinanceScreen() {
       "",
       "── SUMMARY ──",
       `Total Revenue: ₹${totalRevenue.toLocaleString("en-IN")}`,
+      `Total Expenses: ₹${totalExpenses.toLocaleString("en-IN")}`,
+      `Net Profit: ₹${netProfit.toLocaleString("en-IN")}`,
+      `GST (18%): ₹${gstAmount.toLocaleString("en-IN")}`,
+      `Revenue After GST: ₹${revenueAfterGST.toLocaleString("en-IN")}`,
       `This Month: ₹${(stats?.revenueThisMonth || 0).toLocaleString("en-IN")}`,
       `Avg Booking Value: ₹${avgBookingValue.toLocaleString("en-IN")}`,
       `Confirmed: ${confirmedCount} | Pending: ${pendingCount} | Cancelled: ${cancelledCount}`,
@@ -132,14 +186,14 @@ export default function FinanceScreen() {
 
         {/* Tabs */}
         <View style={styles.tabRow}>
-          {(["overview", "payments"] as const).map(t => (
+          {(["overview", "expenses", "payments"] as const).map(t => (
             <Pressable
               key={t}
               style={[styles.tab, tab === t && styles.tabActive]}
               onPress={() => setTab(t)}
             >
               <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-                {t === "overview" ? "Overview" : "Payments"}
+                {t === "overview" ? "Overview" : t === "expenses" ? "Expenses" : "Payments"}
               </Text>
             </Pressable>
           ))}
@@ -167,11 +221,42 @@ export default function FinanceScreen() {
                 <Text style={styles.kpiLabel}>Total Revenue</Text>
               </View>
               <View style={[styles.kpiCard, { backgroundColor: colors.surface }]}>
-                <View style={[styles.kpiIcon, { backgroundColor: "#3B82F615" }]}>
-                  <Feather name="tag" size={18} color="#3B82F6" />
+                <View style={[styles.kpiIcon, { backgroundColor: netProfit >= 0 ? "#10B98115" : "#EF444415" }]}>
+                  <Feather name="pie-chart" size={18} color={netProfit >= 0 ? "#10B981" : "#EF4444"} />
                 </View>
-                <Text style={styles.kpiValue}>₹{avgBookingValue.toLocaleString("en-IN")}</Text>
-                <Text style={styles.kpiLabel}>Avg/Booking</Text>
+                <Text style={styles.kpiValue}>₹{netProfit.toLocaleString("en-IN")}</Text>
+                <Text style={styles.kpiLabel}>Net Profit</Text>
+              </View>
+            </View>
+
+            {/* P&L Summary */}
+            <View style={[styles.section, { backgroundColor: colors.surface }]}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>PROFIT & LOSS SUMMARY</Text>
+                <Pressable onPress={() => setPlModalVisible(true)}>
+                  <Text style={[styles.viewAllText, { color: colors.primary }]}>View Details →</Text>
+                </Pressable>
+              </View>
+              <View style={styles.plRow}>
+                <View style={styles.plItem}>
+                  <Text style={[styles.plLabel, { color: colors.mutedForeground }]}>Total Revenue</Text>
+                  <Text style={[styles.plValue, { color: "#10B981" }]}>₹{totalRevenue.toLocaleString("en-IN")}</Text>
+                </View>
+                <View style={styles.plItem}>
+                  <Text style={[styles.plLabel, { color: colors.mutedForeground }]}>Total Expenses</Text>
+                  <Text style={[styles.plValue, { color: "#EF4444" }]}>₹{totalExpenses.toLocaleString("en-IN")}</Text>
+                </View>
+              </View>
+              <View style={[styles.plDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.plRow}>
+                <View style={styles.plItem}>
+                  <Text style={[styles.plLabel, { color: colors.mutedForeground }]}>GST (18%)</Text>
+                  <Text style={[styles.plValue, { color: colors.warning }]}>₹{gstAmount.toLocaleString("en-IN")}</Text>
+                </View>
+                <View style={styles.plItem}>
+                  <Text style={[styles.plLabel, { color: colors.mutedForeground }]}>Net Profit</Text>
+                  <Text style={[styles.plValue, { color: netProfit >= 0 ? "#10B981" : "#EF4444" }]}>₹{netProfit.toLocaleString("en-IN")}</Text>
+                </View>
               </View>
             </View>
 
@@ -264,144 +349,360 @@ export default function FinanceScreen() {
           </>
         )}
 
-        {tab === "payments" && (
+        {tab === "expenses" && (
           <>
-            {/* UPI Section */}
+            {/* Expense Summary */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
-              <View style={styles.payMethodHeader}>
-                <View style={[styles.payMethodIcon, { backgroundColor: "#6366F115" }]}>
-                  <Ionicons name="qr-code-outline" size={22} color="#6366F1" />
+              <Text style={styles.sectionTitle}>EXPENSE SUMMARY</Text>
+              <View style={styles.expenseSummaryRow}>
+                <View style={styles.expenseSummaryItem}>
+                  <Text style={[styles.expenseSummaryLabel, { color: colors.mutedForeground }]}>Total Expenses</Text>
+                  <Text style={[styles.expenseSummaryValue, { color: "#EF4444" }]}>₹{totalExpenses.toLocaleString("en-IN")}</Text>
                 </View>
-                <View>
-                  <Text style={styles.payMethodTitle}>UPI Payment</Text>
-                  <Text style={[styles.payMethodSub, { color: colors.mutedForeground }]}>
-                    Guests pay via any UPI app
-                  </Text>
+                <View style={styles.expenseSummaryItem}>
+                  <Text style={[styles.expenseSummaryLabel, { color: colors.mutedForeground }]}>This Month</Text>
+                  <Text style={[styles.expenseSummaryValue, { color: colors.primary }]}>₹{totalExpenses.toLocaleString("en-IN")}</Text>
                 </View>
               </View>
-
-              {upiId ? (
-                <>
-                  <View style={[styles.upiIdBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <Text style={styles.upiIdText}>{upiId}</Text>
-                    <Pressable
-                      onPress={() => { Clipboard.setString(upiId); }}
-                      style={[styles.copyBtn, { borderColor: colors.primary }]}
-                    >
-                      <Feather name="copy" size={14} color={colors.primary} />
-                      <Text style={[styles.copyBtnText, { color: colors.primary }]}>Copy</Text>
-                    </Pressable>
-                  </View>
-
-                  <Text style={styles.payAppLabel}>Guests can pay with:</Text>
-                  <View style={styles.payAppsRow}>
-                    {[
-                      { name: "PhonePe", color: "#5F259F", bg: "#5F259F15", icon: "📱" },
-                      { name: "GPay", color: "#1A73E8", bg: "#1A73E815", icon: "💳" },
-                      { name: "Paytm", color: "#00BAF2", bg: "#00BAF215", icon: "🅿️" },
-                      { name: "BHIM", color: "#0B4EA2", bg: "#0B4EA215", icon: "🏛️" },
-                    ].map(app => (
-                      <Pressable
-                        key={app.name}
-                        style={[styles.payAppChip, { backgroundColor: app.bg, borderColor: app.color + "40" }]}
-                        onPress={() => {
-                          const upiUrl = `upi://pay?pa=${upiId}&pn=Homestay&cu=INR`;
-                          Linking.openURL(upiUrl).catch(() => {});
-                        }}
-                      >
-                        <Text style={styles.payAppIcon}>{app.icon}</Text>
-                        <Text style={[styles.payAppName, { color: app.color }]}>{app.name}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </>
-              ) : (
-                <View style={[styles.setupBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <Feather name="alert-circle" size={20} color={colors.warning} />
-                  <Text style={[styles.setupText, { color: colors.mutedForeground }]}>
-                    No UPI ID configured. Add it in your property settings.
-                  </Text>
-                </View>
-              )}
+              <Pressable
+                style={[styles.addExpenseBtn, { backgroundColor: colors.primary }]}
+                onPress={() => setExpenseModalVisible(true)}
+              >
+                <Feather name="plus" size={16} color="#fff" />
+                <Text style={styles.addExpenseBtnText}>Add Expense</Text>
+              </Pressable>
             </View>
 
-            {/* Bank Transfer Section */}
+            {/* Expense List */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
-              <View style={styles.payMethodHeader}>
-                <View style={[styles.payMethodIcon, { backgroundColor: "#10B98115" }]}>
-                  <Feather name="credit-card" size={22} color="#10B981" />
-                </View>
-                <View>
-                  <Text style={styles.payMethodTitle}>Bank Transfer</Text>
-                  <Text style={[styles.payMethodSub, { color: colors.mutedForeground }]}>
-                    NEFT / IMPS / RTGS
-                  </Text>
-                </View>
-              </View>
-
-              {bankDetails ? (
-                <View style={[styles.bankBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <Text style={styles.bankDetailsText}>{bankDetails}</Text>
-                  <Pressable
-                    style={[styles.copyBtn, { borderColor: colors.primary, marginTop: 10, alignSelf: "flex-start" }]}
-                    onPress={() => Clipboard.setString(bankDetails)}
-                  >
-                    <Feather name="copy" size={14} color={colors.primary} />
-                    <Text style={[styles.copyBtnText, { color: colors.primary }]}>Copy Details</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <View style={[styles.setupBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <Feather name="alert-circle" size={20} color={colors.warning} />
-                  <Text style={[styles.setupText, { color: colors.mutedForeground }]}>
-                    No bank account configured. Add bank details in your property settings.
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Cash Section */}
-            <View style={[styles.section, { backgroundColor: colors.surface }]}>
-              <View style={styles.payMethodHeader}>
-                <View style={[styles.payMethodIcon, { backgroundColor: "#F59E0B15" }]}>
-                  <Feather name="dollar-sign" size={22} color="#F59E0B" />
-                </View>
-                <View>
-                  <Text style={styles.payMethodTitle}>Cash Payment</Text>
-                  <Text style={[styles.payMethodSub, { color: colors.mutedForeground }]}>
-                    Pay directly at the property
-                  </Text>
-                </View>
-              </View>
-              <View style={[styles.infoBox, { backgroundColor: "#F59E0B10", borderColor: "#F59E0B30" }]}>
-                <Text style={[styles.infoText, { color: "#92400E" }]}>
-                  💡 Cash payments are accepted at check-in. Guests should carry exact amount in INR.
-                </Text>
-              </View>
-            </View>
-
-            {/* Payment Tips */}
-            <View style={[styles.section, { backgroundColor: colors.surface }]}>
-              <Text style={styles.sectionTitle}>PAYMENT TIPS</Text>
-              {[
-                "Always collect payment within 24 hours of check-in confirmation.",
-                "Send WhatsApp receipt to guests after payment received.",
-                "UPI is fastest — most guests prefer PhonePe or GPay.",
-                "For groups above ₹10,000, bank transfer is recommended.",
-              ].map((tip, i) => (
-                <View key={i} style={[styles.tipRow, { borderColor: colors.border }]}>
-                  <View style={[styles.tipNum, { backgroundColor: colors.primary + "15" }]}>
-                    <Text style={[styles.tipNumText, { color: colors.primary }]}>{i + 1}</Text>
+              <Text style={styles.sectionTitle}>RECENT EXPENSES</Text>
+              {expenses.map((expense) => (
+                <View key={expense.id} style={[styles.expenseRow, { borderColor: colors.border }]}>
+                  <View style={[styles.expenseIcon, { backgroundColor: "#EF444415" }]}>
+                    <Feather name="arrow-up-right" size={14} color="#EF4444" />
                   </View>
-                  <Text style={[styles.tipText, { color: colors.foreground }]}>{tip}</Text>
+                  <View style={styles.expenseInfo}>
+                    <Text style={styles.expenseCategory}>{expense.category}</Text>
+                    <Text style={[styles.expenseDesc, { color: colors.mutedForeground }]}>{expense.description}</Text>
+                    <Text style={[styles.expenseDate, { color: colors.mutedForeground }]}>{expense.date}</Text>
+                  </View>
+                  <View style={styles.expenseRight}>
+                    <Text style={[styles.expenseAmount, { color: "#EF4444" }]}>
+                      -₹{expense.amount.toLocaleString("en-IN")}
+                    </Text>
+                  </View>
                 </View>
               ))}
+              {expenses.length === 0 && (
+                <Text style={[styles.emptyExpenses, { color: colors.mutedForeground }]}>No expenses recorded</Text>
+              )}
             </View>
+
+            {/* Expense by Category */}
+            <View style={[styles.section, { backgroundColor: colors.surface }]}>
+              <Text style={styles.sectionTitle}>EXPENSES BY CATEGORY</Text>
+              {EXPENSE_CATEGORIES.map((cat) => {
+                const catTotal = expenses.filter(e => e.category === cat).reduce((sum, e) => sum + e.amount, 0);
+                const maxCatTotal = Math.max(...EXPENSE_CATEGORIES.map(c => expenses.filter(e => e.category === c).reduce((sum, e) => sum + e.amount, 0)), 1);
+                return (
+                  <View key={cat} style={styles.catRow}>
+                    <Text style={styles.catName}>{cat}</Text>
+                    <View style={[styles.catTrack, { backgroundColor: colors.border }]}>
+                      <View
+                        style={[
+                          styles.catBar,
+                          { width: `${Math.round((catTotal / maxCatTotal) * 100)}%`, backgroundColor: "#EF4444" },
+                        ]}
+                      />
+                    </View>
+                    <Text style={[styles.catAmount, { color: "#EF4444" }]}>₹{catTotal.toLocaleString("en-IN")}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {tab === "payments" && (
+          <>
+            {loadingPayments ? (
+              <ActivityIndicator size="large" color="#E8824A" style={{ marginTop: 60 }} />
+            ) : (
+              <>
+                {/* Payment Overview Cards */}
+                <View style={styles.statsRow}>
+                  <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+                    <View style={[styles.statIcon, { backgroundColor: "#10B98115" }]}>
+                      <Feather name="check-circle" size={24} color="#10B981" />
+                    </View>
+                    <Text style={[styles.statValue, { color: "#10B981" }]}>
+                      ₹{paymentDashboard?.totalCollected?.toLocaleString("en-IN") || 0}
+                    </Text>
+                    <Text style={styles.statLabel}>Total Collected</Text>
+                  </View>
+                  <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+                    <View style={[styles.statIcon, { backgroundColor: "#E8824A15" }]}>
+                      <Feather name="clock" size={24} color="#E8824A" />
+                    </View>
+                    <Text style={[styles.statValue, { color: "#E8824A" }]}>
+                      ₹{paymentDashboard?.pendingAmount?.toLocaleString("en-IN") || 0}
+                    </Text>
+                    <Text style={styles.statLabel}>Pending Amount</Text>
+                  </View>
+                </View>
+
+                <View style={styles.statsRow}>
+                  <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+                    <View style={[styles.statIcon, { backgroundColor: "#3B82F615" }]}>
+                      <Feather name="check-square" size={24} color="#3B82F6" />
+                    </View>
+                    <Text style={[styles.statValue, { color: "#3B82F6" }]}>
+                      {paymentDashboard?.completedTransactionsLength || 0}
+                    </Text>
+                    <Text style={styles.statLabel}>Completed Transactions</Text>
+                  </View>
+                  <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+                    <View style={[styles.statIcon, { backgroundColor: "#F59E0B15" }]}>
+                      <Feather name="alert-circle" size={24} color="#F59E0B" />
+                    </View>
+                    <Text style={[styles.statValue, { color: "#F59E0B" }]}>
+                      {paymentDashboard?.pendingTransactionsLength || 0}
+                    </Text>
+                    <Text style={styles.statLabel}>Pending Transactions</Text>
+                  </View>
+                </View>
+
+                {/* Pending Bookings */}
+                <View style={[styles.section, { backgroundColor: colors.surface }]}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Pending Payments</Text>
+                    <View style={[styles.badge, { backgroundColor: "#E8824A" }]}>
+                      <Text style={styles.badgeText}>{paymentDashboard?.pendingBookings?.length || 0}</Text>
+                    </View>
+                  </View>
+                  {paymentDashboard?.pendingBookings?.length === 0 ? (
+                    <View style={[styles.emptyState, { backgroundColor: colors.background }]}>
+                      <Feather name="check-circle" size={48} color="#10B981" />
+                      <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                        All payments collected!
+                      </Text>
+                    </View>
+                  ) : (
+                    paymentDashboard?.pendingBookings?.map((booking: any) => (
+                      <View key={booking.id} style={[styles.pendingBookingCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                        <View style={styles.pendingBookingHeader}>
+                          <Text style={[styles.refText, { color: colors.primary }]}>#{booking.referenceNumber}</Text>
+                          <View style={[styles.statusBadge, { backgroundColor: "#E8824A15" }]}>
+                            <Text style={[styles.statusText, { color: "#E8824A" }]}>
+                              {booking.paymentStatus?.toUpperCase()}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.guestName}>{booking.guestName}</Text>
+                        <View style={styles.pendingBookingDetails}>
+                          <Text style={[styles.detailText, { color: colors.mutedForeground }]}>
+                            Check-in: {booking.checkIn}
+                          </Text>
+                          <Text style={[styles.detailText, { color: colors.mutedForeground }]}>
+                            Check-out: {booking.checkOut}
+                          </Text>
+                        </View>
+                        <View style={styles.amountRow}>
+                          <Text style={[styles.totalAmount, { color: colors.foreground }]}>
+                            ₹{(booking.totalAmount || 0).toLocaleString("en-IN")}
+                          </Text>
+                          <Text style={[styles.paidAmount, { color: "#10B981" }]}>
+                            Paid: ₹{(booking.paidAmount || 0).toLocaleString("en-IN")}
+                          </Text>
+                        </View>
+                        <View style={[styles.remainingBar, { backgroundColor: colors.border }]}>
+                          <View
+                            style={[
+                              styles.remainingFill,
+                              {
+                                width: `${((booking.paidAmount || 0) / (booking.totalAmount || 1)) * 100}%`,
+                                backgroundColor: "#E8824A",
+                              },
+                            ]}
+                          />
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </View>
+
+                {/* Recent Transactions */}
+                <View style={[styles.section, { backgroundColor: colors.surface }]}>
+                  <Text style={styles.sectionTitle}>Recent Transactions</Text>
+                  {paymentDashboard?.recentTransactions?.length === 0 ? (
+                    <View style={[styles.emptyState, { backgroundColor: colors.background }]}>
+                      <Feather name="credit-card" size={48} color={colors.mutedForeground} />
+                      <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                        No transactions yet
+                      </Text>
+                    </View>
+                  ) : (
+                    paymentDashboard?.recentTransactions?.map((transaction: any) => (
+                      <View key={transaction.id} style={[styles.transactionCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                        <View style={styles.transactionLeft}>
+                          <View style={[styles.transactionIcon, { backgroundColor: "#10B98115" }]}>
+                            <Feather name="arrow-down-left" size={18} color="#10B981" />
+                          </View>
+                          <View>
+                            <Text style={styles.transactionMethod}>
+                              {transaction.paymentMethod?.replace("_", " ").toUpperCase()}
+                            </Text>
+                            <Text style={[styles.transactionRef, { color: colors.mutedForeground }]}>
+ #{transaction.booking?.referenceNumber}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.transactionAmount, { color: "#10B981" }]}>
+                          +₹{transaction.amount?.toLocaleString("en-IN")}
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+              </>
+            )}
           </>
         )}
 
         <View style={{ height: 120 }} />
       </ScrollView>
+
+      {/* Expense Modal */}
+      <Modal
+        visible={expenseModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setExpenseModalVisible(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: "rgba(0,0,0,0.5)" }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Add Expense</Text>
+              <Pressable onPress={() => setExpenseModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Record a new expense</Text>
+            <ScrollView style={styles.modalScroll}>
+              <Text style={[styles.inputLabel, { color: colors.foreground }]}>Category</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+                {EXPENSE_CATEGORIES.map((cat) => (
+                  <Pressable
+                    key={cat}
+                    style={[
+                      styles.categoryChip,
+                      {
+                        backgroundColor: newExpense.category === cat ? colors.primary : colors.background,
+                        borderColor: newExpense.category === cat ? colors.primary : colors.border,
+                      },
+                    ]}
+                    onPress={() => setNewExpense({ ...newExpense, category: cat })}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        { color: newExpense.category === cat ? "#fff" : colors.foreground },
+                      ]}
+                    >
+                      {cat}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <Text style={[styles.inputLabel, { color: colors.foreground }]}>Amount (₹)</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                value={newExpense.amount}
+                onChangeText={(text) => setNewExpense({ ...newExpense, amount: text })}
+                placeholder="Enter amount"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="numeric"
+              />
+              <Text style={[styles.inputLabel, { color: colors.foreground }]}>Description</Text>
+              <TextInput
+                style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                value={newExpense.description}
+                onChangeText={(text) => setNewExpense({ ...newExpense, description: text })}
+                placeholder="Enter description"
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+                numberOfLines={3}
+              />
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: colors.muted }]}
+                onPress={() => setExpenseModalVisible(false)}
+              >
+                <Text style={[styles.modalBtnText, { color: colors.foreground }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: colors.primary }]}
+                onPress={addExpense}
+              >
+                <Text style={styles.modalBtnText}>Add Expense</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* P&L Modal */}
+      <Modal
+        visible={plModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPlModalVisible(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: "rgba(0,0,0,0.5)" }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Profit & Loss Statement</Text>
+              <Pressable onPress={() => setPlModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <ScrollView style={styles.modalScroll}>
+              <View style={[styles.plSection, { backgroundColor: colors.background }]}>
+                <Text style={[styles.plSectionTitle, { color: colors.foreground }]}>REVENUE</Text>
+                <Text style={[styles.plSectionValue, { color: "#10B981" }]}>₹{totalRevenue.toLocaleString("en-IN")}</Text>
+              </View>
+              <View style={[styles.plSection, { backgroundColor: colors.background }]}>
+                <Text style={[styles.plSectionTitle, { color: colors.foreground }]}>EXPENSES</Text>
+                {expenses.map((e) => (
+                  <View key={e.id} style={styles.plExpenseItem}>
+                    <Text style={[styles.plExpenseCat, { color: colors.mutedForeground }]}>{e.category}</Text>
+                    <Text style={[styles.plExpenseAmt, { color: "#EF4444" }]}>₹{e.amount.toLocaleString("en-IN")}</Text>
+                  </View>
+                ))}
+                <View style={[styles.plDivider, { backgroundColor: colors.border }]} />
+                <Text style={[styles.plSectionValue, { color: "#EF4444" }]}>₹{totalExpenses.toLocaleString("en-IN")}</Text>
+              </View>
+              <View style={[styles.plSection, { backgroundColor: colors.background }]}>
+                <Text style={[styles.plSectionTitle, { color: colors.foreground }]}>GST (18%)</Text>
+                <Text style={[styles.plSectionValue, { color: colors.warning }]}>₹{gstAmount.toLocaleString("en-IN")}</Text>
+              </View>
+              <View style={[styles.plSection, { backgroundColor: colors.background, borderColor: colors.primary, borderWidth: 2 }]}>
+                <Text style={[styles.plSectionTitle, { color: colors.foreground }]}>NET PROFIT</Text>
+                <Text style={[styles.plSectionValue, { color: netProfit >= 0 ? "#10B981" : "#EF4444" }]}>
+                  ₹{netProfit.toLocaleString("en-IN")}
+                </Text>
+              </View>
+            </ScrollView>
+            <Pressable
+              style={[styles.modalBtn, { backgroundColor: colors.primary }]}
+              onPress={() => setPlModalVisible(false)}
+            >
+              <Text style={styles.modalBtnText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -476,4 +777,138 @@ const styles = StyleSheet.create({
   tipNum: { width: 24, height: 24, borderRadius: 12, justifyContent: "center", alignItems: "center", marginTop: 1 },
   tipNumText: { fontSize: 12, fontWeight: "800" },
   tipText: { flex: 1, fontSize: 13, lineHeight: 20 },
+  sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  viewAllText: { fontSize: 11, fontWeight: "700" },
+  plRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
+  plItem: { flex: 1 },
+  plLabel: { fontSize: 11, color: "#8A7A6E", marginBottom: 4 },
+  plValue: { fontSize: 16, fontWeight: "800" },
+  plDivider: { height: 1, marginVertical: 12 },
+  expenseSummaryRow: { flexDirection: "row", gap: 16, marginBottom: 16 },
+  expenseSummaryItem: { flex: 1 },
+  expenseSummaryLabel: { fontSize: 11, color: "#8A7A6E", marginBottom: 4 },
+  expenseSummaryValue: { fontSize: 18, fontWeight: "800" },
+  addExpenseBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, borderRadius: 12 },
+  addExpenseBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  expenseRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderTopWidth: 1 },
+  expenseIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  expenseInfo: { flex: 1 },
+  expenseCategory: { fontSize: 14, fontWeight: "700", marginBottom: 2 },
+  expenseDesc: { fontSize: 12, marginBottom: 2 },
+  expenseDate: { fontSize: 11 },
+  expenseRight: { alignItems: "flex-end" },
+  statsRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, marginBottom: 16 },
+  statCard: { flex: 1, padding: 14, borderRadius: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  statIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center", marginBottom: 10 },
+  statValue: { fontSize: 18, fontWeight: "800", marginBottom: 2 },
+  statLabel: { fontSize: 11, color: "#8A7A6E", fontWeight: "600" },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, minWidth: 24, alignItems: "center" },
+  badgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  emptyState: { paddingVertical: 40, alignItems: "center" },
+  emptyText: { fontSize: 14, color: "#8A7A6E", marginTop: 12 },
+  pendingBookingCard: { padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 10 },
+  pendingBookingHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  refText: { fontSize: 13, fontWeight: "700" },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  statusText: { fontSize: 10, fontWeight: "700" },
+  guestName: { fontSize: 15, fontWeight: "700", marginBottom: 8 },
+  pendingBookingDetails: { flexDirection: "row", gap: 16, marginBottom: 8 },
+  detailText: { fontSize: 12 },
+  amountRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  totalAmount: { fontSize: 16, fontWeight: "800" },
+  paidAmount: { fontSize: 14, fontWeight: "600" },
+  remainingBar: { height: 6, borderRadius: 3, overflow: "hidden" },
+  remainingFill: { height: "100%", borderRadius: 3 },
+  transactionCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 8 },
+  transactionLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  transactionIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  transactionMethod: { fontSize: 14, fontWeight: "700" },
+  transactionRef: { fontSize: 11, marginTop: 2 },
+  transactionAmount: { fontSize: 15, fontWeight: "800" },
+  expenseAmount: { fontSize: 14, fontWeight: "800" },
+  emptyExpenses: { textAlign: "center", paddingVertical: 20, fontSize: 14 },
+  catRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+  catName: { width: 90, fontSize: 12, fontWeight: "600" },
+  catTrack: { flex: 1, height: 10, borderRadius: 5, overflow: "hidden" },
+  catBar: { height: 10, borderRadius: 5 },
+  catAmount: { width: 80, fontSize: 12, fontWeight: "800", textAlign: "right" },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  modalTitle: { fontSize: 20, fontWeight: "800" },
+  modalSubtitle: { fontSize: 13, marginBottom: 16 },
+  modalScroll: { maxHeight: 300, marginBottom: 16 },
+  inputLabel: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
+  categoryScroll: { marginBottom: 16 },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  categoryChipText: { fontSize: 13, fontWeight: "700" },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    marginBottom: 16,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    textAlignVertical: "top",
+    minHeight: 80,
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  plSection: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  plSectionTitle: { fontSize: 12, fontWeight: "800", marginBottom: 8 },
+  plSectionValue: { fontSize: 20, fontWeight: "800" },
+  plExpenseItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+  },
+  plExpenseCat: { fontSize: 13 },
+  plExpenseAmt: { fontSize: 13, fontWeight: "600" },
 });

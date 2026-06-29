@@ -20,7 +20,11 @@ import { setBaseUrl } from "@workspace/api-client-react";
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+// Set API base URL - use environment variable or fallback to production URL
+const API_BASE = process.env.EXPO_PUBLIC_API_URL 
+  ? process.env.EXPO_PUBLIC_API_URL.replace('/api', '')
+  : "https://homestay-booking--junaid001.replit.app";
+setBaseUrl(API_BASE);
 
 const queryClient = new QueryClient();
 

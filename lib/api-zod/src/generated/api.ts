@@ -569,7 +569,11 @@ export const GetGuestBookingsResponse = zod.array(GetGuestBookingsResponseItem)
  */
 export const GetHostBookingsQueryParams = zod.object({
   "status": zod.coerce.string().optional(),
-  "propertyId": zod.coerce.string().optional()
+  "propertyId": zod.coerce.string().optional(),
+  "checkInFrom": zod.date().optional().describe('Filter bookings with check-in date on or after this date'),
+  "checkInTo": zod.date().optional().describe('Filter bookings with check-in date on or before this date'),
+  "checkOutFrom": zod.date().optional().describe('Filter bookings with check-out date on or after this date'),
+  "checkOutTo": zod.date().optional().describe('Filter bookings with check-out date on or before this date')
 })
 
 export const GetHostBookingsResponseItem = zod.object({

@@ -8,12 +8,13 @@ import {
   Text,
   TextInput,
   View,
+  Modal,
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useGetProperties } from "@workspace/api-client-react";
+import { useGetProperties, getFullImageUrl } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -34,12 +35,38 @@ export default function ExploreScreen() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [sortBy, setSortBy] = useState<"price_low" | "price_high" | "rating">("rating");
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
 
   const { data, isLoading, refetch, isRefetching } = useGetProperties({
     city: selectedCity || undefined,
   });
 
   const properties = data?.properties || [];
+
+  const AMENITIES = ["WiFi", "Parking", "AC", "Kitchen", "TV", "Geyser"];
+
+  const filteredProperties = React.useMemo(() => {
+    let filtered = [...properties];
+    
+    // Filter by price range
+    filtered = filtered.filter(p => 
+      (p.minPrice || 0) >= priceRange[0] && (p.minPrice || 0) <= priceRange[1]
+    );
+
+    // Sort
+    if (sortBy === "price_low") {
+      filtered.sort((a, b) => (a.minPrice || 0) - (b.minPrice || 0));
+    } else if (sortBy === "price_high") {
+      filtered.sort((a, b) => (b.minPrice || 0) - (a.minPrice || 0));
+    } else if (sortBy === "rating") {
+      filtered.sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0));
+    }
+
+    return filtered;
+  }, [properties, priceRange, sortBy]);
 
   const renderProperty = ({ item }: { item: any }) => (
     <Pressable
@@ -49,7 +76,7 @@ export default function ExploreScreen() {
       <View style={styles.imageContainer}>
         {item.photos && item.photos.length > 0 ? (
           <ExpoImage
-            source={{ uri: item.photos[0] }}
+            source={{ uri: getFullImageUrl(item.photos[0]) }}
             style={styles.image}
             contentFit="cover"
           />
@@ -100,6 +127,12 @@ export default function ExploreScreen() {
             placeholderTextColor={colors.mutedForeground}
           />
         </View>
+        <Pressable
+          style={[styles.filterBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => setFilterModalVisible(true)}
+        >
+          <Feather name="sliders" size={20} color={colors.primary} />
+        </Pressable>
       </View>
 
       <View style={styles.destinationsContainer}>
@@ -133,7 +166,7 @@ export default function ExploreScreen() {
       </View>
 
       <FlatList
-        data={properties}
+        data={filteredProperties}
         renderItem={renderProperty}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
@@ -152,6 +185,106 @@ export default function ExploreScreen() {
           )
         }
       />
+
+      {/* Filter Modal */}
+      <Modal visible={filterModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filters</Text>
+              <Pressable onPress={() => setFilterModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.foreground} />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Sort By</Text>
+                <View style={styles.sortOptions}>
+                  {[
+                    { key: "rating", label: "Rating" },
+                    { key: "price_low", label: "Price: Low to High" },
+                    { key: "price_high", label: "Price: High to Low" },
+                  ].map((option) => (
+                    <Pressable
+                      key={option.key}
+                      style={[
+                        styles.sortOption,
+                        { borderColor: colors.border },
+                        sortBy === option.key && { backgroundColor: colors.primary, borderColor: colors.primary }
+                      ]}
+                      onPress={() => setSortBy(option.key as any)}
+                    >
+                      <Text style={[styles.sortOptionText, sortBy === option.key && { color: "#fff" }]}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Price Range</Text>
+                <Text style={styles.priceRangeText}>₹{priceRange[0]} - ₹{priceRange[1]}</Text>
+                <View style={styles.priceRangeButtons}>
+                  <Pressable
+                    style={[styles.priceRangeBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    onPress={() => setPriceRange([0, 2000])}
+                  >
+                    <Text style={styles.priceRangeBtnText}>Budget</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.priceRangeBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    onPress={() => setPriceRange([2000, 5000])}
+                  >
+                    <Text style={styles.priceRangeBtnText}>Mid-Range</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.priceRangeBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    onPress={() => setPriceRange([5000, 10000])}
+                  >
+                    <Text style={styles.priceRangeBtnText}>Premium</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.filterSection}>
+                <Text style={styles.filterLabel}>Amenities</Text>
+                <View style={styles.amenitiesGrid}>
+                  {AMENITIES.map((amenity) => (
+                    <Pressable
+                      key={amenity}
+                      style={[
+                        styles.amenityChip,
+                        { borderColor: colors.border },
+                        selectedAmenities.includes(amenity) && { backgroundColor: colors.primary, borderColor: colors.primary }
+                      ]}
+                      onPress={() => {
+                        setSelectedAmenities(prev =>
+                          prev.includes(amenity)
+                            ? prev.filter(a => a !== amenity)
+                            : [...prev, amenity]
+                        );
+                      }}
+                    >
+                      <Text style={[styles.amenityChipText, selectedAmenities.includes(amenity) && { color: "#fff" }]}>
+                        {amenity}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              <Pressable
+                style={[styles.applyBtn, { backgroundColor: colors.primary }]}
+                onPress={() => setFilterModalVisible(false)}
+              >
+                <Text style={styles.applyBtnText}>Apply Filters</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -163,6 +296,9 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   searchBar: {
     flexDirection: "row",
@@ -176,6 +312,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+    flex: 1,
+  },
+  filterBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   searchInput: {
     flex: 1,
@@ -288,4 +433,79 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: "85%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  modalTitle: { fontSize: 20, fontWeight: "800" },
+  filterSection: { marginBottom: 24 },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#8A7A6E",
+    marginBottom: 12,
+  },
+  sortOptions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  sortOption: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  sortOptionText: { fontSize: 13, fontWeight: "700" },
+  priceRangeText: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  priceRangeButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  priceRangeBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  priceRangeBtnText: { fontSize: 12, fontWeight: "700" },
+  amenitiesGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  amenityChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  amenityChipText: { fontSize: 13, fontWeight: "600" },
+  applyBtn: {
+    height: 56,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 30,
+  },
+  applyBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
 });

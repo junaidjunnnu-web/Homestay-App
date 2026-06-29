@@ -58,6 +58,50 @@ export default function DashboardScreen() {
     [bookingsArr, todayStr]
   );
 
+  // Today's revenue
+  const todayRevenue = useMemo(() => {
+    return bookingsArr
+      .filter(b => b.checkIn === todayStr && (b.status === "confirmed" || b.status === "completed"))
+      .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+  }, [bookingsArr, todayStr]);
+
+  // Weekly revenue (last 7 days)
+  const weeklyRevenue = useMemo(() => {
+    const days = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split("T")[0]!;
+      const dayRevenue = bookingsArr
+        .filter(b => b.checkIn === dateStr && (b.status === "confirmed" || b.status === "completed"))
+        .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+      days.push({
+        label: date.toLocaleDateString("en-IN", { weekday: "short" }),
+        value: dayRevenue,
+      });
+    }
+    return days;
+  }, [bookingsArr]);
+
+  // Occupancy data (last 30 days)
+  const occupancyData = useMemo(() => {
+    const data = [];
+    const today = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split("T")[0]!;
+      const occupiedRooms = bookingsArr.filter(
+        b => b.status === "confirmed" && dateStr >= b.checkIn && dateStr <= b.checkOut
+      ).length;
+      const totalRooms = stats?.totalRooms || 1;
+      const occupancyRate = Math.round((occupiedRooms / totalRooms) * 100);
+      data.push(occupancyRate);
+    }
+    return data;
+  }, [bookingsArr, stats]);
+
   // Pending bookings from guests
   const pendingBookings = useMemo(
     () => bookingsArr.filter(b => b.status === "pending").slice(0, 5),
@@ -181,7 +225,7 @@ export default function DashboardScreen() {
           {[
             { label: "Properties", value: stats?.totalProperties || 0, icon: "home", color: "#6366F1", route: "/(tabs)/properties" },
             { label: "Pending", value: stats?.pendingBookings || 0, icon: "clock", color: "#F59E0B", route: "/(tabs)/bookings" },
-            { label: "Revenue", value: `₹${((stats?.revenueThisMonth || 0) / 1000).toFixed(1)}k`, icon: "trending-up", color: "#10B981", route: "/(tabs)/finance" },
+            { label: "Today's Revenue", value: `₹${(todayRevenue / 1000).toFixed(1)}k`, icon: "trending-up", color: "#10B981", route: "/(tabs)/finance" },
             { label: "Occupancy", value: `${stats?.occupancyPercent || 0}%`, icon: "bar-chart", color: "#8B5CF6", route: "/(tabs)/finance" },
           ].map((stat, i) => (
             <Pressable
@@ -196,6 +240,69 @@ export default function DashboardScreen() {
               <Text style={styles.statLabel}>{stat.label}</Text>
             </Pressable>
           ))}
+        </View>
+
+        {/* Weekly Revenue Chart */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>WEEKLY REVENUE (LAST 7 DAYS)</Text>
+          </View>
+          <View style={[styles.chartCard, { backgroundColor: colors.surface }]}>
+            <View style={styles.chartBars}>
+              {weeklyRevenue.map((day, index) => {
+                const maxValue = Math.max(...weeklyRevenue.map(d => d.value)) || 1;
+                const heightPercent = maxValue > 0 ? (day.value / maxValue) * 100 : 0;
+                return (
+                  <View key={index} style={styles.chartBarContainer}>
+                    <View style={[styles.chartBar, { height: `${Math.max(heightPercent, 5)}%`, backgroundColor: colors.primary }]} />
+                    <Text style={styles.chartLabel}>{day.label}</Text>
+                    <Text style={styles.chartValue}>{day.value > 0 ? `₹${(day.value / 1000).toFixed(1)}k` : '0'}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* Occupancy Rate Graph */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>OCCUPANCY RATE (LAST 30 DAYS)</Text>
+          </View>
+          <View style={[styles.chartCard, { backgroundColor: colors.surface }]}>
+            <View style={styles.occupancyGraph}>
+              {occupancyData.map((rate, index) => {
+                const isToday = index === occupancyData.length - 1;
+                return (
+                  <View key={index} style={styles.occupancyBarContainer}>
+                    <View 
+                      style={[
+                        styles.occupancyBar, 
+                        { 
+                          height: `${rate}%`,
+                          backgroundColor: isToday ? colors.primary : rate > 70 ? '#10B981' : rate > 40 ? '#F59E0B' : '#EF4444'
+                        }
+                      ]} 
+                    />
+                  </View>
+                );
+              })}
+            </View>
+            <View style={styles.occupancyLegend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+                <Text style={styles.legendText}>High (&gt;70%)</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
+                <Text style={styles.legendText}>Medium (40-70%)</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
+                <Text style={styles.legendText}>Low (&lt;40%)</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* Pending Guest Bookings (to confirm/decline) */}
@@ -222,10 +329,10 @@ export default function DashboardScreen() {
                   <View style={styles.bookingInfo}>
                     <Text style={styles.bookingGuest}>{booking.guestName || "Guest"}</Text>
                     <Text style={[styles.bookingMeta, { color: colors.mutedForeground }]}>
-                      #{booking.referenceNumber} · {booking.property?.name}
+                      #{booking.referenceNumber || 'N/A'} · {booking.property?.name || 'N/A'}
                     </Text>
                     <Text style={[styles.bookingMeta, { color: colors.mutedForeground }]}>
-                      {booking.checkIn} → {booking.checkOut} · ₹{booking.totalAmount?.toLocaleString("en-IN")}
+                      {booking.checkIn} → {booking.checkOut} · ₹{(booking.totalAmount || 0).toLocaleString("en-IN")}
                     </Text>
                     {booking.room?.name && (
                       <Text style={[styles.bookingMeta, { color: colors.mutedForeground }]}>
@@ -337,7 +444,7 @@ export default function DashboardScreen() {
                     <View style={styles.bookingInfo}>
                       <Text style={styles.bookingGuest}>{(booking as any).guestName || "Guest"}</Text>
                       <Text style={[styles.bookingMeta, { color: colors.mutedForeground }]}>
-                        #{booking.referenceNumber} · {booking.property?.name}
+                        #{booking.referenceNumber || 'N/A'} · {booking.property?.name || 'N/A'}
                       </Text>
                       <Text style={[styles.bookingMeta, { color: colors.mutedForeground }]}>
                         {new Date(booking.checkIn).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
@@ -352,7 +459,7 @@ export default function DashboardScreen() {
                         {booking.status.toUpperCase()}
                       </Text>
                     </View>
-                    <Text style={styles.bookingAmount}>₹{booking.totalAmount.toLocaleString("en-IN")}</Text>
+                    <Text style={styles.bookingAmount}>₹{(booking.totalAmount || 0).toLocaleString("en-IN")}</Text>
                     {(booking as any).guestMobile && (
                       <Pressable onPress={() => openWhatsApp((booking as any).guestMobile, (booking as any).guestName || "Guest", booking.referenceNumber, booking.status)}>
                         <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
@@ -493,4 +600,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, marginTop: 4,
   },
   addBookingBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  chartCard: {
+    borderRadius: 16, padding: 16, marginBottom: 10,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
+  },
+  chartBars: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end",
+    height: 120, gap: 8,
+  },
+  chartBarContainer: {
+    flex: 1, alignItems: "center", gap: 4,
+  },
+  chartBar: {
+    width: "100%", borderRadius: 6, minHeight: 4,
+  },
+  chartLabel: { fontSize: 10, color: "#8A7A6E", fontWeight: "600" },
+  chartValue: { fontSize: 9, color: "#8A7A6E", fontWeight: "500" },
+  occupancyGraph: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end",
+    height: 80, gap: 2,
+  },
+  occupancyBarContainer: {
+    flex: 1, height: "100%",
+  },
+  occupancyBar: {
+    width: "100%", borderRadius: 2, minHeight: 2,
+  },
+  occupancyLegend: {
+    flexDirection: "row", justifyContent: "space-around", marginTop: 12, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: "#EDE4DC",
+  },
+  legendItem: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+  },
+  legendDot: {
+    width: 8, height: 8, borderRadius: 4,
+  },
+  legendText: { fontSize: 11, color: "#8A7A6E", fontWeight: "600" },
 });

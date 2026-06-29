@@ -601,6 +601,22 @@ month?: string;
 export type GetHostBookingsParams = {
 status?: string;
 propertyId?: string;
+/**
+ * Filter bookings with check-in date on or after this date
+ */
+checkInFrom?: string;
+/**
+ * Filter bookings with check-in date on or before this date
+ */
+checkInTo?: string;
+/**
+ * Filter bookings with check-out date on or after this date
+ */
+checkOutFrom?: string;
+/**
+ * Filter bookings with check-out date on or before this date
+ */
+checkOutTo?: string;
 };
 
 export type GetStaffParams = {

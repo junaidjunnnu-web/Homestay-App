@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  FlatList,
   Linking,
   Pressable,
   ScrollView,
@@ -11,7 +12,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useGetProperty, useGetPropertyReviews, useGetMenuItems } from "@workspace/api-client-react";
+import { useGetProperty, useGetPropertyReviews, useGetMenuItems, useGetProperties, getFullImageUrl } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { Image as ExpoImage } from "expo-image";
@@ -35,6 +36,7 @@ export default function PropertyDetailScreen() {
     { propertyId: id! },
     { query: { enabled: !!id } as any }
   );
+  const { data: allProperties } = useGetProperties({ city: property?.city });
 
   if (isLoading) {
     return (
@@ -86,7 +88,7 @@ export default function PropertyDetailScreen() {
           <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
             {property.photos && property.photos.length > 0 ? (
               property.photos.map((photo, index) => (
-                <ExpoImage key={index} source={{ uri: photo }} style={styles.galleryImage} contentFit="cover" />
+                <ExpoImage key={index} source={{ uri: getFullImageUrl(photo) }} style={styles.galleryImage} contentFit="cover" />
               ))
             ) : (
               <LinearGradient colors={[colors.primary, colors.accent]} style={styles.galleryImage} />
@@ -144,6 +146,70 @@ export default function PropertyDetailScreen() {
               </View>
             )}
           </View>
+
+          {/* Host Profile */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>About the Host</Text>
+            <View style={[styles.hostCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.hostAvatar}>
+                <Text style={[styles.hostAvatarText, { color: colors.primary }]}>
+                  {property.host?.name?.charAt(0).toUpperCase() || "H"}
+                </Text>
+              </View>
+              <View style={styles.hostInfo}>
+                <Text style={styles.hostName}>{property.host?.name || "Property Host"}</Text>
+                <Text style={[styles.hostSince, { color: colors.mutedForeground }]}>
+                  Hosting since {new Date(property.host?.createdAt || Date.now()).getFullYear()}
+                </Text>
+                <View style={styles.hostStats}>
+                  <View style={styles.hostStat}>
+                    <Text style={styles.hostStatValue}>{property.reviewCount || 0}</Text>
+                    <Text style={styles.hostStatLabel}>Reviews</Text>
+                  </View>
+                  <View style={[styles.hostStatDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.hostStat}>
+                    <Text style={styles.hostStatValue}>{property.averageRating?.toFixed(1) || "N/A"}</Text>
+                    <Text style={styles.hostStatLabel}>Rating</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Similar Properties */}
+          {allProperties && allProperties.properties && allProperties.properties.length > 1 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Similar Properties in {property.city}</Text>
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={allProperties.properties.filter((p: any) => p.id !== property.id).slice(0, 5)}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }: { item: any }) => (
+                  <Pressable
+                    style={[styles.similarCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    onPress={() => router.push(`/property/${item.id}`)}
+                  >
+                    {item.photos && item.photos.length > 0 ? (
+                      <ExpoImage
+                        source={{ uri: getFullImageUrl(item.photos[0]) }}
+                        style={styles.similarImage}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <LinearGradient colors={[colors.primary, colors.accent]} style={styles.similarImage} />
+                    )}
+                    <Text style={styles.similarName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={[styles.similarPrice, { color: colors.primary }]}>
+                      ₹{item.minPrice?.toLocaleString("en-IN") || 0}
+                      <Text style={styles.similarPerNight}>/night</Text>
+                    </Text>
+                  </Pressable>
+                )}
+                contentContainerStyle={styles.similarList}
+              />
+            </View>
+          )}
 
           {/* About */}
           <View style={styles.section}>
@@ -276,30 +342,80 @@ export default function PropertyDetailScreen() {
           {/* Reviews */}
           {reviews && reviews.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Reviews</Text>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Reviews</Text>
+                <Pressable onPress={() => {}}>
+                  <Text style={[styles.writeReviewBtn, { color: colors.primary }]}>Write Review</Text>
+                </Pressable>
+              </View>
               {reviews.map((review) => (
                 <View key={review.id} style={styles.reviewCard}>
                   <View style={styles.reviewHeader}>
-                    <Text style={styles.reviewerName}>{review.guestName || "Anonymous"}</Text>
+                    <View style={styles.reviewerInfo}>
+                      <View style={[styles.reviewerAvatar, { backgroundColor: colors.primary + "15" }]}>
+                        <Text style={[styles.reviewerAvatarText, { color: colors.primary }]}>
+                          {review.guestName?.charAt(0).toUpperCase() || "G"}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={styles.reviewerName}>{review.guestName || "Anonymous"}</Text>
+                        <Text style={[styles.reviewDate, { color: colors.mutedForeground }]}>
+                          {new Date(review.createdAt).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </Text>
+                      </View>
+                    </View>
                     <View style={styles.reviewRating}>
                       {[1, 2, 3, 4, 5].map((s) => (
                         <Ionicons
                           key={s}
                           name="star"
-                          size={12}
+                          size={14}
                           color={s <= review.rating ? colors.star : colors.muted}
                         />
                       ))}
                     </View>
                   </View>
                   <Text style={styles.reviewComment}>{review.comment}</Text>
-                  <Text style={styles.reviewDate}>
-                    {new Date(review.createdAt).toLocaleDateString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </Text>
+                  
+                  {/* Review Photos */}
+                  {(review as any)?.photos && (review as any).photos.length > 0 && (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reviewPhotosScroll}>
+                      {(review as any).photos.map((photo: string, idx: number) => (
+                        <ExpoImage
+                          key={idx}
+                          source={{ uri: getFullImageUrl(photo) }}
+                          style={styles.reviewPhoto}
+                          contentFit="cover"
+                        />
+                      ))}
+                    </ScrollView>
+                  )}
+
+                  {/* Host Reply */}
+                  {(review as any)?.hostReply && (
+                    <View style={[styles.hostReplyCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <Text style={[styles.hostReplyLabel, { color: colors.primary }]}>Host Reply</Text>
+                      <Text style={styles.hostReplyText}>{(review as any).hostReply}</Text>
+                    </View>
+                  )}
+
+                  {/* Helpful Actions */}
+                  <View style={styles.reviewActions}>
+                    <Pressable style={styles.helpfulBtn}>
+                      <Feather name="thumbs-up" size={14} color={colors.mutedForeground} />
+                      <Text style={[styles.helpfulText, { color: colors.mutedForeground }]}>
+                        Helpful ({(review as any)?.helpfulCount || 0})
+                      </Text>
+                    </Pressable>
+                    <Pressable style={styles.helpfulBtn}>
+                      <Feather name="flag" size={14} color={colors.mutedForeground} />
+                      <Text style={[styles.helpfulText, { color: colors.mutedForeground }]}>Report</Text>
+                    </Pressable>
+                  </View>
                 </View>
               ))}
             </View>
@@ -444,11 +560,106 @@ const styles = StyleSheet.create({
   reviewHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 6,
+    alignItems: "flex-start",
+    marginBottom: 8,
   },
-  reviewerName: { fontWeight: "700" },
+  reviewerInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  reviewerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reviewerAvatarText: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  reviewerName: { fontWeight: "700", fontSize: 14 },
   reviewRating: { flexDirection: "row", gap: 2 },
-  reviewComment: { fontSize: 14, color: "#444", lineHeight: 20, marginBottom: 6 },
+  reviewComment: { fontSize: 14, color: "#444", lineHeight: 20, marginBottom: 8 },
   reviewDate: { fontSize: 11, color: "#8A7A6E" },
+  writeReviewBtn: { fontSize: 13, fontWeight: "700" },
+  reviewPhotosScroll: {
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  reviewPhoto: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  hostReplyCard: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  hostReplyLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  hostReplyText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  reviewActions: {
+    flexDirection: "row",
+    gap: 16,
+    marginTop: 12,
+  },
+  helpfulBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  helpfulText: {
+    fontSize: 12,
+  },
   emptyText: { color: "#8A7A6E", fontStyle: "italic" },
+  hostCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  hostAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#FAF6F1",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  hostAvatarText: { fontSize: 24, fontWeight: "800" },
+  hostInfo: { flex: 1 },
+  hostName: { fontSize: 16, fontWeight: "700", marginBottom: 2 },
+  hostSince: { fontSize: 12, marginBottom: 8 },
+  hostStats: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  hostStat: { alignItems: "center" },
+  hostStatValue: { fontSize: 16, fontWeight: "800" },
+  hostStatLabel: { fontSize: 10, color: "#8A7A6E" },
+  hostStatDivider: { width: 1, height: 24, marginHorizontal: 16 },
+  similarList: { gap: 12, paddingBottom: 8 },
+  similarCard: {
+    width: 180,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  similarImage: { width: "100%", height: 100 },
+  similarName: { fontSize: 14, fontWeight: "600", padding: 12, paddingTop: 8 },
+  similarPrice: { fontSize: 14, fontWeight: "700", paddingHorizontal: 12, paddingBottom: 12 },
+  similarPerNight: { fontSize: 11, fontWeight: "400" },
 });

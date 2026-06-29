@@ -30,6 +30,30 @@ export function setBaseUrl(url: string | null): void {
 }
 
 /**
+ * Get the full URL for an image by prepending the base URL if the path is relative.
+ * This ensures images load correctly on all devices, not just the owner's device.
+ * 
+ * @param imagePath - The image path (can be relative like "/api/storage/objects/..." or absolute)
+ * @returns The full URL with base URL prepended if needed
+ */
+export function getFullImageUrl(imagePath: string | undefined): string {
+  if (!imagePath) return "";
+  
+  // If already a full URL (starts with http:// or https://), return as-is
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    return imagePath;
+  }
+  
+  // If relative path (starts with /), prepend base URL
+  if (imagePath.startsWith("/") && _baseUrl) {
+    return `${_baseUrl}${imagePath}`;
+  }
+  
+  // Otherwise return as-is
+  return imagePath;
+}
+
+/**
  * Register a getter that supplies a bearer auth token.  Before every fetch
  * the getter is invoked; when it returns a non-null string, an
  * `Authorization: Bearer <token>` header is attached to the request.

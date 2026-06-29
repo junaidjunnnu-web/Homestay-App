@@ -36,7 +36,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
     setAuthTokenGetter(async () => {
       return await AsyncStorage.getItem(TOKEN_KEY);
     });

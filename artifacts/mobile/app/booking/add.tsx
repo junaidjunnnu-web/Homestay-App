@@ -21,7 +21,7 @@ export default function AddBookingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const { data: properties } = useGetHostProperties();
+  const { data: properties, isLoading: isLoadingProperties, error: propertiesError } = useGetHostProperties();
   const { mutate: createBooking, isPending } = useCreateBooking();
 
   const [selectedProperty, setSelectedProperty] = useState<any>(null);
@@ -103,24 +103,39 @@ export default function AddBookingScreen() {
       <View style={styles.content}>
         {/* Property Selection */}
         <Text style={styles.sectionLabel}>SELECT PROPERTY</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-          {(properties || []).map((prop: any) => (
-            <Pressable
-              key={prop.id}
-              style={[
-                styles.propertyChip,
-                { borderColor: colors.border, backgroundColor: colors.surface },
-                selectedProperty?.id === prop.id && { backgroundColor: colors.primary, borderColor: colors.primary },
-              ]}
-              onPress={() => { setSelectedProperty(prop); setSelectedRoom(null); }}
-            >
-              <Feather name="home" size={14} color={selectedProperty?.id === prop.id ? "#fff" : colors.mutedForeground} />
-              <Text style={[styles.propertyChipText, selectedProperty?.id === prop.id && { color: "#fff" }]}>
-                {prop.name}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        {isLoadingProperties ? (
+          <ActivityIndicator color={colors.primary} style={{ marginBottom: 16 }} />
+        ) : propertiesError ? (
+          <View style={[styles.errorBox, { backgroundColor: colors.destructive + "10", borderColor: colors.destructive }]}>
+            <Feather name="alert-circle" size={16} color={colors.destructive} />
+            <Text style={[styles.errorText, { color: colors.destructive }]}>Failed to load properties</Text>
+          </View>
+        ) : !properties || properties.length === 0 ? (
+          <View style={[styles.emptyBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Feather name="home" size={24} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No properties found</Text>
+            <Text style={[styles.emptySubtext, { color: colors.mutedForeground }]}>Add a property first to create bookings</Text>
+          </View>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+            {properties.map((prop: any) => (
+              <Pressable
+                key={prop.id}
+                style={[
+                  styles.propertyChip,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                  selectedProperty?.id === prop.id && { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+                onPress={() => { setSelectedProperty(prop); setSelectedRoom(null); }}
+              >
+                <Feather name="home" size={14} color={selectedProperty?.id === prop.id ? "#fff" : colors.mutedForeground} />
+                <Text style={[styles.propertyChipText, selectedProperty?.id === prop.id && { color: "#fff" }]}>
+                  {prop.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Room Selection */}
         {selectedProperty && (
@@ -129,7 +144,11 @@ export default function AddBookingScreen() {
             {isLoadingRooms ? (
               <ActivityIndicator color={colors.primary} style={{ marginBottom: 16 }} />
             ) : rooms.length === 0 ? (
-              <Text style={[styles.hint, { color: colors.mutedForeground }]}>No rooms found — add rooms to this property first</Text>
+              <View style={[styles.emptyBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Feather name="layers" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No rooms found</Text>
+                <Text style={[styles.emptySubtext, { color: colors.mutedForeground }]}>Add rooms to this property first</Text>
+              </View>
             ) : (
               <View style={styles.roomsGrid}>
                 {rooms.map((room: any) => (
@@ -312,6 +331,25 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   propertyChipText: { fontSize: 13, fontWeight: "600", color: "#8A7A6E" },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  errorText: { fontSize: 13, fontWeight: "600" },
+  emptyBox: {
+    alignItems: "center",
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  emptyText: { fontSize: 15, fontWeight: "700", marginTop: 8 },
+  emptySubtext: { fontSize: 13, marginTop: 4, textAlign: "center" },
   roomsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 8 },
   roomChip: {
     padding: 12,

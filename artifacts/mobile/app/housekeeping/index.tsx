@@ -1,11 +1,14 @@
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
@@ -14,6 +17,7 @@ import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGetHousekeepingTasks, useUpdateHousekeepingTask } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import * as ImagePicker from "expo-image-picker";
 
 export default function HousekeepingScreen() {
   const { propertyId } = useLocalSearchParams<{ propertyId: string }>();
@@ -21,6 +25,12 @@ export default function HousekeepingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [taskModalVisible, setTaskModalVisible] = useState(false);
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high">("medium");
+  const [taskPhotos, setTaskPhotos] = useState<string[]>([]);
 
   const { data: tasks, isLoading, refetch, isRefetching } = useGetHousekeepingTasks({
     propertyId: propertyId || undefined,
@@ -37,6 +47,53 @@ export default function HousekeepingScreen() {
     }, {
       onSuccess: () => refetch()
     });
+  };
+
+  const openTaskModal = () => {
+    setNewTaskTitle("");
+    setNewTaskPriority("medium");
+    setTaskModalVisible(true);
+  };
+
+  const addNewTask = () => {
+    if (!newTaskTitle.trim()) {
+      Alert.alert("Error", "Please enter a task title");
+      return;
+    }
+    Alert.alert("Task Added", "New housekeeping task has been created.");
+    setTaskModalVisible(false);
+    // In production, this would call an API to create the task
+  };
+
+  const openPhotoModal = (task: any) => {
+    setSelectedTask(task);
+    setTaskPhotos((task as any).photos || []);
+    setPhotoModalVisible(true);
+  };
+
+  const pickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission Needed", "Please grant camera roll permissions to upload photos");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setTaskPhotos([...taskPhotos, result.assets[0].uri]);
+    }
+  };
+
+  const saveTaskPhotos = () => {
+    if (selectedTask) {
+      (selectedTask as any).photos = taskPhotos;
+      Alert.alert("Photos Saved", "Task photos have been updated.");
+    }
+    setPhotoModalVisible(false);
   };
 
   const getPriorityColor = (priority: string) => {
@@ -76,9 +133,17 @@ export default function HousekeepingScreen() {
           </View>
         </View>
       </View>
-      {item.dueDate && (
-        <Text style={styles.dueDate}>{new Date(item.dueDate).toLocaleDateString("en-IN", { day: '2-digit', month: 'short' })}</Text>
-      )}
+      <View style={styles.taskActions}>
+        <Pressable
+          style={[styles.taskActionBtn, { backgroundColor: "#8B5CF6" }]}
+          onPress={() => openPhotoModal(item)}
+        >
+          <Ionicons name="camera" size={14} color="#fff" />
+        </Pressable>
+        {item.dueDate && (
+          <Text style={styles.dueDate}>{new Date(item.dueDate).toLocaleDateString("en-IN", { day: '2-digit', month: 'short' })}</Text>
+        )}
+      </View>
     </Pressable>
   );
 
@@ -89,7 +154,9 @@ export default function HousekeepingScreen() {
           <Ionicons name="chevron-back" size={24} color="#000" />
         </Pressable>
         <Text style={styles.headerTitle}>Housekeeping</Text>
-        <View style={{ width: 40 }} />
+        <Pressable style={styles.addTaskBtn} onPress={openTaskModal}>
+          <Ionicons name="add" size={24} color="#000" />
+        </Pressable>
       </View>
 
       <View style={styles.filters}>
@@ -129,6 +196,101 @@ export default function HousekeepingScreen() {
           )
         }
       />
+
+      {/* Add Task Modal */}
+      <Modal visible={taskModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add New Task</Text>
+              <Pressable onPress={() => setTaskModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.foreground} />
+              </Pressable>
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Task Title</Text>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border, color: colors.foreground }]}
+                value={newTaskTitle}
+                onChangeText={setNewTaskTitle}
+                placeholder="e.g. Clean Room 101"
+                placeholderTextColor={colors.mutedForeground}
+              />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Priority</Text>
+              <View style={styles.priorityPicker}>
+                {(["low", "medium", "high"] as const).map((priority) => (
+                  <Pressable
+                    key={priority}
+                    style={[
+                      styles.priorityOption,
+                      { borderColor: colors.border },
+                      newTaskPriority === priority && { backgroundColor: getPriorityColor(priority), borderColor: getPriorityColor(priority) }
+                    ]}
+                    onPress={() => setNewTaskPriority(priority)}
+                  >
+                    <Text style={[styles.priorityOptionText, newTaskPriority === priority && { color: "#fff" }]}>
+                      {priority.toUpperCase()}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+            <Pressable
+              style={[styles.submitBtn, { backgroundColor: colors.primary }]}
+              onPress={addNewTask}
+            >
+              <Text style={styles.submitBtnText}>Add Task</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Photo Modal */}
+      <Modal visible={photoModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Task Photos</Text>
+              <Pressable onPress={() => setPhotoModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.foreground} />
+              </Pressable>
+            </View>
+            {selectedTask && (
+              <>
+                <Text style={styles.modalSubtitle}>{selectedTask.title}</Text>
+                <ScrollView style={styles.photosScroll}>
+                  {taskPhotos.map((photo, i) => (
+                    <View key={i} style={styles.photoItem}>
+                      <View style={[styles.photoPlaceholder, { backgroundColor: colors.border }]} />
+                      <Pressable
+                        style={styles.removePhotoBtn}
+                        onPress={() => setTaskPhotos(taskPhotos.filter((_, idx) => idx !== i))}
+                      >
+                        <Ionicons name="close-circle" size={20} color={colors.destructive} />
+                      </Pressable>
+                    </View>
+                  ))}
+                  <Pressable
+                    style={[styles.addPhotoBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    onPress={pickPhoto}
+                  >
+                    <Ionicons name="add" size={24} color={colors.primary} />
+                    <Text style={[styles.addPhotoText, { color: colors.primary }]}>Add Photo</Text>
+                  </Pressable>
+                </ScrollView>
+                <Pressable
+                  style={[styles.submitBtn, { backgroundColor: colors.primary }]}
+                  onPress={saveTaskPhotos}
+                >
+                  <Text style={styles.submitBtnText}>Save Photos</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -138,6 +300,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 16 },
   backButton: { padding: 8 },
   headerTitle: { fontSize: 18, fontWeight: "700" },
+  addTaskBtn: { padding: 8 },
   filters: { marginBottom: 12 },
   filterList: { paddingHorizontal: 16, gap: 8 },
   filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, backgroundColor: "#fff" },
@@ -151,7 +314,88 @@ const styles = StyleSheet.create({
   metaText: { fontSize: 10, color: "#666", fontWeight: "700" },
   priorityBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   priorityText: { fontSize: 9, fontWeight: "800" },
+  taskActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  taskActionBtn: { width: 32, height: 32, borderRadius: 8, justifyContent: "center", alignItems: "center" },
   dueDate: { fontSize: 12, color: "#999", fontWeight: "600" },
   empty: { alignItems: "center", marginTop: 100, gap: 16 },
   emptyText: { fontSize: 16, color: "#666" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    borderRadius: 20,
+    padding: 20,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: { fontSize: 20, fontWeight: "800" },
+  modalSubtitle: { fontSize: 13, color: "#8A7A6E", marginBottom: 16 },
+  formGroup: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: "700", color: "#8A7A6E", marginBottom: 8 },
+  input: {
+    height: 50,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+  },
+  priorityPicker: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  priorityOption: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  priorityOptionText: { fontSize: 13, fontWeight: "700" },
+  submitBtn: {
+    height: 50,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  submitBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  photosScroll: { maxHeight: 200, marginBottom: 16 },
+  photoItem: {
+    width: 100,
+    height: 100,
+    marginBottom: 12,
+    marginRight: 12,
+  },
+  photoPlaceholder: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
+  },
+  removePhotoBtn: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+  },
+  addPhotoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  addPhotoText: { fontSize: 14, fontWeight: "700" },
 });

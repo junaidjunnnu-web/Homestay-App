@@ -12,7 +12,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useGetHostProperties, useDeleteProperty } from "@workspace/api-client-react";
+import { useGetHostProperties, useDeleteProperty, getFullImageUrl } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { Image as ExpoImage } from "expo-image";
 
@@ -39,7 +39,7 @@ export default function PropertiesScreen() {
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.cardMain}>
         {item.photos && item.photos.length > 0 ? (
-          <ExpoImage source={{ uri: item.photos[0] }} style={styles.thumbnail} contentFit="cover" />
+          <ExpoImage source={{ uri: getFullImageUrl(item.photos[0]) }} style={styles.thumbnail} contentFit="cover" />
         ) : (
           <View style={[styles.thumbnail, styles.thumbPlaceholder, { backgroundColor: colors.muted }]}>
             <Feather name="home" size={24} color={colors.mutedForeground} />

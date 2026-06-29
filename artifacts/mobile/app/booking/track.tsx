@@ -94,8 +94,8 @@ export default function TrackBookingScreen() {
               <Feather name="home" size={16} color={colors.mutedForeground} />
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>Property</Text>
-                <Text style={styles.detailValue}>{booking.property?.name}</Text>
-                <Text style={styles.detailSub}>{booking.room?.name}</Text>
+                <Text style={styles.detailValue}>{booking.property?.name || 'N/A'}</Text>
+                <Text style={styles.detailSub}>{booking.room?.name || 'N/A'}</Text>
               </View>
             </View>
 
@@ -113,8 +113,8 @@ export default function TrackBookingScreen() {
               <Feather name="user" size={16} color={colors.mutedForeground} />
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>Guest</Text>
-                <Text style={styles.detailValue}>{booking.guestName}</Text>
-                <Text style={styles.detailSub}>{booking.guestCount} guests</Text>
+                <Text style={styles.detailValue}>{booking.guestName || 'N/A'}</Text>
+                <Text style={styles.detailSub}>{booking.guestCount || 0} guests</Text>
               </View>
             </View>
 
@@ -122,7 +122,7 @@ export default function TrackBookingScreen() {
 
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Total Amount</Text>
-              <Text style={styles.totalValue}>₹{booking.totalAmount.toLocaleString("en-IN")}</Text>
+              <Text style={styles.totalValue}>₹{(booking.totalAmount || 0).toLocaleString("en-IN")}</Text>
             </View>
           </View>
         )}

@@ -14,10 +14,11 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCreateBooking, useGetProperty, useGetRoom } from "@workspace/api-client-react";
+import { useCreateBooking, useGetProperty, useGetRoom, getFullImageUrl } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import DatePicker from "@/components/DatePicker";
+import { Image as ExpoImage } from "expo-image";
 
 function calcNights(checkIn: string, checkOut: string): number {
   if (!checkIn || !checkOut) return 0;
@@ -113,14 +114,14 @@ export default function BookingScreen() {
 
   const shareWhatsApp = () => {
     if (!successData) return;
-    const text = `🏡 Booking Confirmed!\nProperty: ${property?.name}\nRef: ${successData.referenceNumber}\nCheck-in: ${form.checkIn}\nCheck-out: ${form.checkOut}\n${nights} night${nights !== 1 ? "s" : ""}\nTotal: ₹${successData.totalAmount.toLocaleString("en-IN")}`;
+    const text = `🏡 Booking Confirmed!\nProperty: ${property?.name}\nRef: ${successData.referenceNumber}\nCheck-in: ${form.checkIn}\nCheck-out: ${form.checkOut}\n${nights} night${nights !== 1 ? "s" : ""}\nTotal: ₹${(successData.totalAmount || 0).toLocaleString("en-IN")}`;
     Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`);
   };
 
   const notifyHostWhatsApp = () => {
     if (!successData || !(property as any)?.phone) return;
     const hostPhone = (property as any).phone;
-    const msg = `Hi! I just made a booking at ${property?.name}.\n\n📋 Ref: #${successData.referenceNumber}\n👤 Guest: ${form.guestName}\n📱 Mobile: +91${form.guestMobile}\n📅 Check-in: ${form.checkIn}\n📅 Check-out: ${form.checkOut}\n🛏 Room: ${room?.name}\n💰 Total: ₹${successData.totalAmount.toLocaleString("en-IN")}\n\nPlease confirm my booking. Thank you!`;
+    const msg = `Hi! I just made a booking at ${property?.name}.\n\n📋 Ref: #${successData.referenceNumber}\n👤 Guest: ${form.guestName}\n📱 Mobile: +91${form.guestMobile}\n📅 Check-in: ${form.checkIn}\n📅 Check-out: ${form.checkOut}\n🛏 Room: ${room?.name}\n💰 Total: ₹${(successData.totalAmount || 0).toLocaleString("en-IN")}\n\nPlease confirm my booking. Thank you!`;
     Linking.openURL(`https://wa.me/91${hostPhone}?text=${encodeURIComponent(msg)}`);
   };
 
@@ -157,7 +158,7 @@ export default function BookingScreen() {
               { l: "Room", v: room?.name },
               { l: "Check-in", v: form.checkIn },
               { l: "Check-out", v: form.checkOut },
-              { l: `${nights} night${nights !== 1 ? "s" : ""}`, v: `₹${successData.totalAmount.toLocaleString("en-IN")}` },
+              { l: `${nights} night${nights !== 1 ? "s" : ""}`, v: `₹${(successData.totalAmount || 0).toLocaleString("en-IN")}` },
             ].map(({ l, v }, i) => (
               <View key={i} style={[styles.stayRow, i > 0 && { borderTopWidth: 1, borderColor: colors.border + "60" }]}>
                 <Text style={styles.stayLabel}>{l}</Text>
@@ -169,7 +170,7 @@ export default function BookingScreen() {
           {/* Payment Options */}
           <Text style={[styles.payHeader, { color: colors.foreground }]}>Complete Your Payment</Text>
           <Text style={[styles.paySub, { color: colors.mutedForeground }]}>
-            Choose a payment method for ₹{successData.totalAmount.toLocaleString("en-IN")}
+            Choose a payment method for ₹{(successData.totalAmount || 0).toLocaleString("en-IN")}
           </Text>
 
           {/* UPI Options */}
@@ -182,10 +183,10 @@ export default function BookingScreen() {
               <Text style={[styles.payUpiId, { color: colors.mutedForeground }]}>UPI ID: {property.upiId}</Text>
               <View style={styles.upiAppsRow}>
                 {[
-                  { name: "PhonePe", color: "#5F259F", url: `phonepe://pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "📱" },
-                  { name: "GPay", color: "#1A73E8", url: `tez://upi/pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "💳" },
-                  { name: "Paytm", color: "#00BAF2", url: `paytmmp://pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "🅿️" },
-                  { name: "Any UPI", color: "#E8824A", url: `upi://pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "📲" },
+                  { name: "PhonePe", color: "#5F259F", url: `phonepe://pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount || 0}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "📱" },
+                  { name: "GPay", color: "#1A73E8", url: `tez://upi/pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount || 0}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "💳" },
+                  { name: "Paytm", color: "#00BAF2", url: `paytmmp://pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount || 0}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "🅿️" },
+                  { name: "Any UPI", color: "#E8824A", url: `upi://pay?pa=${property.upiId}&pn=${encodeURIComponent(property?.name ?? "")}&am=${successData.totalAmount || 0}&tn=Booking+${successData.referenceNumber}&cu=INR`, icon: "📲" },
                 ].map(app => (
                   <Pressable
                     key={app.name}
@@ -225,7 +226,7 @@ export default function BookingScreen() {
               <Text style={[styles.paySectionTitle, { color: "#92400E" }]}>Pay Cash at Check-in</Text>
             </View>
             <Text style={[styles.cashNote, { color: "#78350F" }]}>
-              You can pay ₹{successData.totalAmount.toLocaleString("en-IN")} in cash directly at the property. Please carry exact change.
+              You can pay ₹{(successData.totalAmount || 0).toLocaleString("en-IN")} in cash directly at the property. Please carry exact change.
             </Text>
           </View>
 
@@ -273,14 +274,31 @@ export default function BookingScreen() {
       <View style={styles.content}>
         {/* Room summary */}
         <View style={[styles.roomCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.roomIcon, { backgroundColor: colors.primary + "15" }]}>
-            <Feather name="home" size={26} color={colors.primary} />
+          {/* Room Image */}
+          <View style={styles.bookingImageSection}>
+            {room?.photos && room.photos.length > 0 ? (
+              <ExpoImage 
+                source={{ uri: getFullImageUrl(room.photos[0]) }} 
+                style={styles.bookingRoomImage} 
+                contentFit="cover" 
+              />
+            ) : (
+              <View style={[styles.bookingPlaceholderImage, { backgroundColor: colors.primary + "15" }]}>
+                <Feather name="home" size={40} color={colors.primary} />
+              </View>
+            )}
           </View>
-          <View style={styles.roomInfo}>
-            <Text style={styles.roomName}>{room?.name}</Text>
-            <Text style={styles.roomMeta}>{room?.type} · Max {room?.capacity} guests</Text>
-            <Text style={[styles.roomPrice, { color: colors.primary }]}>
-              ₹{room?.pricePerNight.toLocaleString("en-IN")}/night
+
+          {/* Room Info */}
+          <View style={styles.bookingRoomInfo}>
+            <Text style={styles.bookingRoomName}>{room?.name}</Text>
+            <View style={styles.bookingMetaRow}>
+              <Text style={styles.bookingRoomMeta}>{room?.type}</Text>
+              <Text style={styles.bookingMetaSeparator}>·</Text>
+              <Text style={styles.bookingRoomMeta}>Max {room?.capacity} guests</Text>
+            </View>
+            <Text style={[styles.bookingRoomPrice, { color: colors.primary }]}>
+              ₹{(room?.pricePerNight || 0).toLocaleString("en-IN")}/night
             </Text>
           </View>
         </View>
@@ -317,7 +335,7 @@ export default function BookingScreen() {
           <View style={[styles.priceBox, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}>
             <Feather name="moon" size={16} color={colors.primary} />
             <Text style={styles.priceCalc}>
-              ₹{room?.pricePerNight.toLocaleString("en-IN")} × {nights} night{nights !== 1 ? "s" : ""}
+              ₹{(room?.pricePerNight || 0).toLocaleString("en-IN")} × {nights} night{nights !== 1 ? "s" : ""}
             </Text>
             <Text style={[styles.priceTotal, { color: colors.primary }]}>
               ₹{totalAmount.toLocaleString("en-IN")}
@@ -446,24 +464,36 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 14, fontWeight: "600", color: "#444", marginBottom: 6 },
 
   roomCard: {
-    flexDirection: "row",
-    gap: 14,
-    padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    alignItems: "center",
+    overflow: "hidden",
+    marginBottom: 20,
   },
-  roomIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
+  bookingImageSection: {
+    height: 160,
+  },
+  bookingRoomImage: {
+    width: "100%",
+    height: "100%",
+  },
+  bookingPlaceholderImage: {
+    width: "100%",
+    height: "100%",
     justifyContent: "center",
     alignItems: "center",
   },
-  roomInfo: { flex: 1 },
-  roomName: { fontSize: 17, fontWeight: "800", marginBottom: 2 },
-  roomMeta: { fontSize: 12, color: "#8A7A6E", marginBottom: 4 },
-  roomPrice: { fontSize: 16, fontWeight: "800" },
+  bookingRoomInfo: {
+    padding: 16,
+  },
+  bookingRoomName: { fontSize: 20, fontWeight: "800", marginBottom: 8 },
+  bookingMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  bookingMetaSeparator: { marginHorizontal: 8, color: "#8A7A6E" },
+  bookingRoomMeta: { fontSize: 14, color: "#8A7A6E" },
+  bookingRoomPrice: { fontSize: 20, fontWeight: "800" },
 
   priceBox: {
     flexDirection: "row",

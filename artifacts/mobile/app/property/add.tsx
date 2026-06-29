@@ -13,7 +13,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCreateProperty, useUpdateProperty, useGetProperty } from "@workspace/api-client-react";
+import { useCreateProperty, useUpdateProperty, useGetProperty, getFullImageUrl } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import * as ImagePicker from "expo-image-picker";
 import { uploadImage } from "@/utils/uploadImage";
@@ -153,7 +153,7 @@ export default function AddPropertyScreen() {
         <View style={styles.photosRow}>
           {form.photos.map((uri, index) => (
             <View key={index} style={styles.photoWrapper}>
-              <ExpoImage source={{ uri }} style={styles.photoThumb} contentFit="cover" />
+              <ExpoImage source={{ uri: getFullImageUrl(uri) }} style={styles.photoThumb} contentFit="cover" />
               <Pressable style={styles.removePhotoBtn} onPress={() => removePhoto(index)}>
                 <Ionicons name="close-circle" size={20} color="#E53E3E" />
               </Pressable>

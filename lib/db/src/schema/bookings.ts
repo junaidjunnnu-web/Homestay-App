@@ -13,13 +13,19 @@ export const bookingsTable = pgTable("bookings", {
   guestCount: integer("guest_count").notNull().default(1),
   status: text("status", { enum: ["pending", "confirmed", "cancelled", "completed"] }).notNull().default("pending"),
   totalAmount: doublePrecision("total_amount").notNull(),
-  paymentStatus: text("payment_status", { enum: ["pending", "paid", "refunded"] }).notNull().default("pending"),
+  paymentStatus: text("payment_status", { enum: ["pending", "partial", "paid", "refunded"] }).notNull().default("pending"),
+  paymentMethod: text("payment_method", { 
+    enum: ["cash", "upi", "bank_transfer", "card", "google_pay", "phonepe", "paytm"] 
+  }),
+  paidAmount: doublePrecision("paid_amount").notNull().default(0),
+  paymentDueDate: date("payment_due_date", { mode: "string" }),
   specialRequests: text("special_requests"),
   referenceNumber: text("reference_number").notNull().unique(),
   guestName: text("guest_name").notNull(),
   guestEmail: text("guest_email").notNull(),
   guestMobile: text("guest_mobile").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const insertBookingSchema = createInsertSchema(bookingsTable).omit({ id: true, createdAt: true });

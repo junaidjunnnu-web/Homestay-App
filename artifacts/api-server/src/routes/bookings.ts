@@ -157,7 +157,21 @@ router.get("/bookings/guest", requireAuth, async (req, res) => {
 router.get("/bookings/host", requireAuth, async (req, res) => {
   const user = (req as typeof req & { user: { id: string } }).user;
   try {
-    const { status: statusFilter, propertyId: propFilter } = req.query as { status?: string; propertyId?: string };
+    const { 
+      status: statusFilter, 
+      propertyId: propFilter,
+      checkInFrom,
+      checkInTo,
+      checkOutFrom,
+      checkOutTo
+    } = req.query as { 
+      status?: string; 
+      propertyId?: string;
+      checkInFrom?: string;
+      checkInTo?: string;
+      checkOutFrom?: string;
+      checkOutTo?: string;
+    };
 
     const hostProps = await db.select({ id: propertiesTable.id }).from(propertiesTable).where(eq(propertiesTable.hostId, user.id));
     const propIds = hostProps.map(p => p.id);
@@ -180,6 +194,12 @@ router.get("/bookings/host", requireAuth, async (req, res) => {
 
     const conditions = [sql`${bookingsTable.roomId} = ANY(ARRAY[${sql.raw(roomIds.map(id => `'${id}'`).join(","))}]::uuid[])`];
     if (statusFilter) conditions.push(eq(bookingsTable.status, statusFilter as "pending" | "confirmed" | "cancelled" | "completed"));
+    
+    // Date range filters
+    if (checkInFrom) conditions.push(sql`${bookingsTable.checkIn} >= ${sql.raw(`'${checkInFrom}'`)}`);
+    if (checkInTo) conditions.push(sql`${bookingsTable.checkIn} <= ${sql.raw(`'${checkInTo}'`)}`);
+    if (checkOutFrom) conditions.push(sql`${bookingsTable.checkOut} >= ${sql.raw(`'${checkOutFrom}'`)}`);
+    if (checkOutTo) conditions.push(sql`${bookingsTable.checkOut} <= ${sql.raw(`'${checkOutTo}'`)}`);
 
     const bookings = await db.select().from(bookingsTable).where(and(...conditions)).orderBy(desc(bookingsTable.createdAt));
     const enriched = await Promise.all(bookings.map(enrichBooking));

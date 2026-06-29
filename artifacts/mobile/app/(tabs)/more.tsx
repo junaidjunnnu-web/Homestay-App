@@ -77,6 +77,19 @@ export default function MoreScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
         <View style={styles.section}>
+          <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
+          <MenuItem
+            icon="bell"
+            title="Notifications"
+            subtitle="Bookings, reminders & alerts"
+            color="#F59E0B"
+            iconType="feather"
+            badge="3"
+            onPress={() => router.push("/notifications")}
+          />
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionLabel}>BOOKINGS</Text>
           <MenuItem
             icon="plus-square"
@@ -161,6 +174,34 @@ export default function MoreScreen() {
             color={colors.primary}
             iconType="feather"
             onPress={() => router.push("/property/add")}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>SETTINGS</Text>
+          <MenuItem
+            icon="settings"
+            title="Settings"
+            subtitle="Property description, policies & payments"
+            color="#6366F1"
+            iconType="feather"
+            onPress={() => router.push("/settings")}
+          />
+          <MenuItem
+            icon="credit-card"
+            title="Payment Settings"
+            subtitle="Payment methods, UPI, bank details"
+            color="#E8824A"
+            iconType="feather"
+            onPress={() => router.push("/settings/payment")}
+          />
+          <MenuItem
+            icon="list"
+            title="Transaction History"
+            subtitle="View all payment transactions"
+            color="#8B5CF6"
+            iconType="feather"
+            onPress={() => router.push("/transactions")}
           />
         </View>
 

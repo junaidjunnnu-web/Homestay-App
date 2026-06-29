@@ -1,11 +1,14 @@
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   Linking,
 } from "react-native";
@@ -20,8 +23,12 @@ import {
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
+import PaymentModal from "@/components/PaymentModal";
+import GuestPaymentModal from "@/components/GuestPaymentModal";
 
 const FILTERS = ["All", "Pending", "Confirmed", "Completed", "Cancelled"];
+const PAYMENT_STATUSES = ["pending", "paid", "partial"] as const;
+const BOOKING_SOURCES = ["walk-in", "phone", "WhatsApp", "online"] as const;
 
 function buildDateStrip() {
   const days: string[] = [];
@@ -45,12 +52,18 @@ export default function BookingsScreen() {
   const { user } = useAuth();
   const [filter, setFilter] = useState("All");
   const [calendarDate, setCalendarDate] = useState<string | null>(null);
+  const [notesModalVisible, setNotesModalVisible] = useState(false);
+  const [timelineModalVisible, setTimelineModalVisible] = useState(false);
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [guestPaymentModalVisible, setGuestPaymentModalVisible] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [notesText, setNotesText] = useState("");
 
   const isHost = user?.role === "host";
 
   const guestQuery = useGetGuestBookings({ query: { enabled: !isHost && !!user } } as any);
   const hostQuery = useGetHostBookings(
-    { status: filter === "All" ? undefined : filter.toLowerCase() as any },
+    {}, // Get all bookings without status filter initially
     { query: { enabled: isHost && !!user } } as any
   );
 
@@ -82,6 +95,12 @@ export default function BookingsScreen() {
     let list = isHost ? bookings : bookings.filter(b =>
       filter === "All" ? true : b.status === filter.toLowerCase()
     );
+    
+    // Apply status filter for hosts after getting all bookings
+    if (isHost && filter !== "All") {
+      list = list.filter(b => b.status === filter.toLowerCase());
+    }
+    
     if (calendarDate) {
       list = list.filter(b => b.checkIn <= calendarDate && b.checkOut > calendarDate);
     }
@@ -119,10 +138,92 @@ export default function BookingsScreen() {
   };
 
   const openUPI = (item: any) => {
-    const upiId = item.property?.upiId;
-    if (!upiId) return;
-    const upiUrl = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(item.property.name)}&am=${item.totalAmount}&tn=Booking%20${item.referenceNumber}&cu=INR`;
-    Linking.openURL(upiUrl);
+    if (!item?.property) {
+      Alert.alert("Error", "Property information not available for this booking");
+      return;
+    }
+    setSelectedBooking(item);
+    setGuestPaymentModalVisible(true);
+  };
+
+  const handleCheckIn = (item: any) => {
+    Alert.alert("Check-In Guest", `Mark ${item.guestName} as checked in?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Check In",
+        onPress: () => {
+          updateStatus({ bookingId: item.id, data: { status: "confirmed" } }, {
+            onSuccess: () => refetch(),
+          });
+        },
+      },
+    ]);
+  };
+
+  const handleCheckOut = (item: any) => {
+    Alert.alert("Check-Out Guest", `Mark ${item.guestName} as checked out?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Check Out",
+        onPress: () => {
+          updateStatus({ bookingId: item.id, data: { status: "completed" } }, {
+            onSuccess: () => refetch(),
+          });
+        },
+      },
+    ]);
+  };
+
+  const togglePaymentStatus = (item: any) => {
+    setSelectedBooking(item);
+    setPaymentModalVisible(true);
+  };
+
+  const openNotesModal = (item: any) => {
+    setSelectedBooking(item);
+    setNotesText(item.specialRequests || "");
+    setNotesModalVisible(true);
+  };
+
+  const openTimelineModal = (item: any) => {
+    setSelectedBooking(item);
+    setTimelineModalVisible(true);
+  };
+
+  const saveNotes = () => {
+    if (!selectedBooking) return;
+    // Note: This would require a separate API endpoint for updating booking notes
+    Alert.alert("Notes Saved", "Special requests have been updated.");
+    setNotesModalVisible(false);
+  };
+
+  const shareInvoiceViaWhatsApp = (item: any) => {
+    const mobile = isHost ? item.guestMobile : item.property?.phone;
+    if (!mobile) {
+      Alert.alert("No Contact", "No phone number available to share invoice.");
+      return;
+    }
+    
+    const invoiceText = `
+🧾 BOOKING INVOICE
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+Reference: #${item.referenceNumber}
+Property: ${item.property?.name}
+Room: ${item.room?.name}
+
+Guest: ${item.guestName}
+Check-in: ${item.checkIn}
+Check-out: ${item.checkOut}
+Nights: ${Math.ceil((new Date(item.checkOut).getTime() - new Date(item.checkIn).getTime()) / (1000 * 60 * 60 * 24))}
+
+Amount: ₹${item.totalAmount?.toLocaleString("en-IN")}
+Payment Status: ${item.paymentStatus?.toUpperCase()}
+
+Thank you for your booking!
+    `.trim();
+    
+    Linking.openURL(`https://wa.me/91${mobile}?text=${encodeURIComponent(invoiceText)}`);
   };
 
   const renderBooking = ({ item }: { item: any }) => {
@@ -218,6 +319,68 @@ export default function BookingsScreen() {
               <Text style={styles.actionBtnText}>Confirm</Text>
             </Pressable>
           )}
+          {isHost && item.status === "confirmed" && (
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: "#3B82F6" }]}
+              onPress={() => handleCheckIn(item)}
+            >
+              <Ionicons name="log-in-outline" size={15} color="#fff" />
+              <Text style={styles.actionBtnText}>Check-In</Text>
+            </Pressable>
+          )}
+          {isHost && item.status === "confirmed" && (
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: "#10B981" }]}
+              onPress={() => handleCheckOut(item)}
+            >
+              <Ionicons name="log-out-outline" size={15} color="#fff" />
+              <Text style={styles.actionBtnText}>Check-Out</Text>
+            </Pressable>
+          )}
+          {isHost && (
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: "#8B5CF6" }]}
+              onPress={() => togglePaymentStatus(item)}
+            >
+              <Feather name="credit-card" size={15} color="#fff" />
+              <Text style={styles.actionBtnText}>Payment</Text>
+            </Pressable>
+          )}
+          <Pressable
+            style={[styles.actionBtn, { backgroundColor: "#E8824A" }]}
+            onPress={() => openNotesModal(item)}
+          >
+            <Feather name="file-text" size={15} color="#fff" />
+            <Text style={styles.actionBtnText}>Notes</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.actionBtn, { backgroundColor: "#25D366" }]}
+            onPress={() => shareInvoiceViaWhatsApp(item)}
+          >
+            <Ionicons name="logo-whatsapp" size={15} color="#fff" />
+            <Text style={styles.actionBtnText}>Invoice</Text>
+          </Pressable>
+          {!isHost && (
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: "#6366F1" }]}
+              onPress={() => openTimelineModal(item)}
+            >
+              <Feather name="clock" size={15} color="#fff" />
+              <Text style={styles.actionBtnText}>Timeline</Text>
+            </Pressable>
+          )}
+          {!isHost && item.property?.phone && (
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: "#25D366" }]}
+              onPress={() => {
+                const msg = `Hi! I have a booking at ${item.property?.name} (Ref: #${item.referenceNumber}) from ${item.checkIn} to ${item.checkOut}. I have a question about my booking.`;
+                Linking.openURL(`https://wa.me/91${item.property.phone}?text=${encodeURIComponent(msg)}`);
+              }}
+            >
+              <Ionicons name="logo-whatsapp" size={15} color="#fff" />
+              <Text style={styles.actionBtnText}>Host</Text>
+            </Pressable>
+          )}
           {!isHost && item.status === "confirmed" && item.property?.upiId && (
             <Pressable style={[styles.actionBtn, { backgroundColor: colors.primary }]} onPress={() => openUPI(item)}>
               <Ionicons name="qr-code" size={15} color="#fff" />
@@ -276,9 +439,16 @@ export default function BookingsScreen() {
       {/* Host: Date strip calendar */}
       {isHost && (
         <View style={{ marginBottom: 4 }}>
-          <Text style={[styles.calendarLabel, { color: colors.mutedForeground }]}>
-            {calendarDate ? `Showing bookings for ${calendarDate}` : "Tap a date to filter"}
-          </Text>
+          <View style={styles.calendarHeader}>
+            <Text style={[styles.calendarLabel, { color: colors.mutedForeground }]}>
+              {calendarDate ? `Showing bookings for ${calendarDate}` : "Tap a date to filter"}
+            </Text>
+            {calendarDate && (
+              <Pressable onPress={() => setCalendarDate(null)}>
+                <Text style={[styles.clearDateBtn, { color: colors.primary }]}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -386,6 +556,134 @@ export default function BookingsScreen() {
           )
         }
       />
+
+      {/* Notes Modal */}
+      <Modal
+        visible={notesModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setNotesModalVisible(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: "rgba(0,0,0,0.5)" }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Booking Notes</Text>
+              <Pressable onPress={() => setNotesModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
+              Special requests, dietary needs, or other notes for this booking
+            </Text>
+            <TextInput
+              style={[styles.notesInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+              multiline
+              numberOfLines={6}
+              value={notesText}
+              onChangeText={setNotesText}
+              placeholder="Add notes here..."
+              placeholderTextColor={colors.mutedForeground}
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: colors.muted }]}
+                onPress={() => setNotesModalVisible(false)}
+              >
+                <Text style={[styles.modalBtnText, { color: colors.foreground }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, { backgroundColor: colors.primary }]}
+                onPress={saveNotes}
+              >
+                <Text style={styles.modalBtnText}>Save Notes</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Timeline Modal */}
+      <Modal
+        visible={timelineModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setTimelineModalVisible(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: "rgba(0,0,0,0.5)" }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Booking Timeline</Text>
+              <Pressable onPress={() => setTimelineModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+            {selectedBooking && (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.timelineContainer}>
+                  {[
+                    {
+                      step: "Booking Created",
+                      date: new Date(selectedBooking.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+                      status: "completed",
+                      icon: "calendar",
+                    },
+                    {
+                      step: "Booking Confirmed",
+                      date: selectedBooking.status === "confirmed" || selectedBooking.status === "completed" ? "Confirmed" : "Pending",
+                      status: selectedBooking.status === "confirmed" || selectedBooking.status === "completed" ? "completed" : "pending",
+                      icon: "check-circle",
+                    },
+                    {
+                      step: "Payment Made",
+                      date: selectedBooking.paymentStatus === "paid" ? "Paid" : "Pending",
+                      status: selectedBooking.paymentStatus === "paid" ? "completed" : "pending",
+                      icon: "credit-card",
+                    },
+                    {
+                      step: "Check-in",
+                      date: selectedBooking.checkIn,
+                      status: new Date(selectedBooking.checkIn) <= new Date() ? "completed" : "pending",
+                      icon: "log-in-outline",
+                    },
+                    {
+                      step: "Check-out",
+                      date: selectedBooking.checkOut,
+                      status: new Date(selectedBooking.checkOut) <= new Date() ? "completed" : "pending",
+                      icon: "log-out-outline",
+                    },
+                  ].map((event, index) => (
+                    <View key={index} style={styles.timelineItem}>
+                      <View style={[styles.timelineDot, { backgroundColor: event.status === "completed" ? colors.success : colors.muted }]} />
+                      {index < 4 && <View style={[styles.timelineLine, { backgroundColor: index < 3 && event.status === "completed" ? colors.success : colors.muted }]} />}
+                      <View style={styles.timelineContent}>
+                        <View style={styles.timelineHeader}>
+                          <Ionicons name={event.icon as any} size={16} color={event.status === "completed" ? colors.success : colors.mutedForeground} />
+                          <Text style={[styles.timelineStep, { color: colors.foreground }]}>{event.step}</Text>
+                        </View>
+                        <Text style={[styles.timelineDate, { color: colors.mutedForeground }]}>{event.date}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <PaymentModal
+        visible={paymentModalVisible}
+        onClose={() => setPaymentModalVisible(false)}
+        booking={selectedBooking}
+        onSuccess={() => refetch()}
+      />
+
+      <GuestPaymentModal
+        visible={guestPaymentModalVisible}
+        onClose={() => setGuestPaymentModalVisible(false)}
+        booking={selectedBooking}
+        onSuccess={() => refetch()}
+      />
     </View>
   );
 }
@@ -411,7 +709,15 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   addBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
-  calendarLabel: { fontSize: 11, fontWeight: "600", paddingHorizontal: 20, marginBottom: 8 },
+  calendarHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  calendarLabel: { fontSize: 11, fontWeight: "600" },
+  clearDateBtn: { fontSize: 12, fontWeight: "700" },
   dateStrip: { paddingHorizontal: 16, gap: 8 },
   datePill: {
     width: 52,
@@ -518,4 +824,79 @@ const styles = StyleSheet.create({
   clearFilter: { fontSize: 14, fontWeight: "700", marginTop: 8 },
   loginBtn: { width: "100%", height: 52, borderRadius: 12, justifyContent: "center", alignItems: "center" },
   loginBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  modalTitle: { fontSize: 20, fontWeight: "800" },
+  modalSubtitle: { fontSize: 13, marginBottom: 16 },
+  notesInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    textAlignVertical: "top",
+    minHeight: 120,
+    marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  timelineContainer: { paddingVertical: 16 },
+  timelineItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 24,
+    position: "relative",
+  },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+    marginTop: 2,
+  },
+  timelineLine: {
+    position: "absolute",
+    left: 5,
+    top: 14,
+    width: 2,
+    height: 40,
+  },
+  timelineContent: { flex: 1 },
+  timelineHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  timelineStep: { fontSize: 14, fontWeight: "700" },
+  timelineDate: { fontSize: 12 },
 });

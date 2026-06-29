@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  ScrollView,
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -25,10 +26,14 @@ export default function StaffScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [attendanceModalVisible, setAttendanceModalVisible] = useState(false);
+  const [tasksModalVisible, setTasksModalVisible] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<any>(null);
   const [form, setForm] = useState({
     name: "",
     mobile: "",
     role: "caretaker",
+    salary: "",
   });
 
   const { data: staff, isLoading, refetch, isRefetching } = useGetStaff({}, { 
@@ -46,7 +51,7 @@ export default function StaffScreen() {
     createStaff({ data: { ...form, propertyId: "" } as any }, {
       onSuccess: () => {
         setIsModalVisible(false);
-        setForm({ name: "", mobile: "", role: "caretaker" });
+        setForm({ name: "", mobile: "", role: "caretaker", salary: "" });
         refetch();
       }
     });
@@ -62,6 +67,21 @@ export default function StaffScreen() {
   const openWhatsApp = (mobile: string, name: string) => {
     const url = `https://wa.me/91${mobile}?text=${encodeURIComponent(`Hi ${name}, regarding the homestay...`)}`;
     Linking.openURL(url);
+  };
+
+  const openAttendanceModal = (staffMember: any) => {
+    setSelectedStaff(staffMember);
+    setAttendanceModalVisible(true);
+  };
+
+  const openTasksModal = (staffMember: any) => {
+    setSelectedStaff(staffMember);
+    setTasksModalVisible(true);
+  };
+
+  const markAttendance = (status: "present" | "absent" | "late") => {
+    Alert.alert("Attendance Marked", `${selectedStaff?.name} marked as ${status}`);
+    setAttendanceModalVisible(false);
   };
 
   if (!user || user.role !== "host") {
@@ -109,13 +129,24 @@ export default function StaffScreen() {
                 <Text style={[styles.roleText, { color: colors.primary }]}>{item.role.toUpperCase()}</Text>
               </View>
               <Text style={styles.staffMobile}>{item.mobile}</Text>
+              {(item as any).salary && (
+                <Text style={[styles.staffSalary, { color: colors.mutedForeground }]}>
+                  Salary: ₹{((item as any).salary || 0).toLocaleString("en-IN")}/mo
+                </Text>
+              )}
             </View>
             <View style={styles.actions}>
+              <Pressable style={[styles.actionBtn, { backgroundColor: "#10B981" }]} onPress={() => openAttendanceModal(item)}>
+                <Feather name="check-circle" size={18} color="#fff" />
+              </Pressable>
+              <Pressable style={[styles.actionBtn, { backgroundColor: "#8B5CF6" }]} onPress={() => openTasksModal(item)}>
+                <Feather name="list" size={18} color="#fff" />
+              </Pressable>
               <Pressable style={[styles.actionBtn, { backgroundColor: "#25D366" }]} onPress={() => openWhatsApp(item.mobile || "", item.name)}>
-                <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+                <Ionicons name="logo-whatsapp" size={18} color="#fff" />
               </Pressable>
               <Pressable style={[styles.actionBtn, { backgroundColor: colors.destructive + "15" }]} onPress={() => handleDelete(item.id)}>
-                <Ionicons name="trash-outline" size={20} color={colors.destructive} />
+                <Ionicons name="trash-outline" size={18} color={colors.destructive} />
               </Pressable>
             </View>
           </View>
@@ -174,6 +205,17 @@ export default function StaffScreen() {
               </View>
             </View>
 
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Monthly Salary (₹)</Text>
+              <TextInput 
+                style={[styles.input, { borderColor: colors.border }]} 
+                value={form.salary}
+                onChangeText={(text) => setForm({ ...form, salary: text })}
+                placeholder="e.g. 15000"
+                keyboardType="numeric"
+              />
+            </View>
+
             <Pressable 
               style={[styles.submitBtn, { backgroundColor: colors.primary }, isCreating && { opacity: 0.7 }]}
               onPress={handleAddStaff}
@@ -181,6 +223,90 @@ export default function StaffScreen() {
             >
               {isCreating ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>Add Staff Member</Text>}
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Attendance Modal */}
+      <Modal visible={attendanceModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Mark Attendance</Text>
+              <Pressable onPress={() => setAttendanceModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.foreground} />
+              </Pressable>
+            </View>
+            {selectedStaff && (
+              <>
+                <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
+                  {selectedStaff.name} · {selectedStaff.role}
+                </Text>
+                <View style={styles.attendanceOptions}>
+                  {[
+                    { status: "present", label: "Present", color: "#10B981" },
+                    { status: "absent", label: "Absent", color: "#EF4444" },
+                    { status: "late", label: "Late", color: "#F59E0B" },
+                  ].map((opt) => (
+                    <Pressable
+                      key={opt.status}
+                      style={[styles.attendanceBtn, { backgroundColor: opt.color }]}
+                      onPress={() => markAttendance(opt.status as any)}
+                    >
+                      <Text style={styles.attendanceBtnText}>{opt.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Tasks Modal */}
+      <Modal visible={tasksModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Assign Tasks</Text>
+              <Pressable onPress={() => setTasksModalVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.foreground} />
+              </Pressable>
+            </View>
+            {selectedStaff && (
+              <>
+                <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
+                  {selectedStaff.name} · {selectedStaff.role}
+                </Text>
+                <ScrollView style={styles.tasksScroll}>
+                  {[
+                    "Clean Room 101",
+                    "Prepare breakfast",
+                    "Check inventory",
+                    "Greet new guests",
+                    "Laundry duty",
+                    "Garden maintenance",
+                  ].map((task, i) => (
+                    <Pressable
+                      key={i}
+                      style={[styles.taskItem, { backgroundColor: colors.background, borderColor: colors.border }]}
+                    >
+                      <View style={styles.taskLeft}>
+                        <Ionicons name="square-outline" size={20} color={colors.primary} />
+                        <Text style={[styles.taskText, { color: colors.foreground }]}>{task}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <Pressable
+                  style={[styles.submitBtn, { backgroundColor: colors.primary }]}
+                  onPress={() => setTasksModalVisible(false)}
+                >
+                  <Text style={styles.submitBtnText}>Save Tasks</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -260,9 +386,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#8A7A6E",
   },
+  staffSalary: {
+    fontSize: 12,
+    marginTop: 4,
+  },
   actions: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
   },
   actionBtn: {
     width: 36,
@@ -270,6 +400,49 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: "#8A7A6E",
+    marginBottom: 20,
+  },
+  attendanceOptions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  attendanceBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  attendanceBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  tasksScroll: {
+    maxHeight: 250,
+    marginBottom: 16,
+  },
+  taskItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  taskLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  taskText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
   empty: {
     alignItems: "center",

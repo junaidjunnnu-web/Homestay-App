@@ -5,7 +5,10 @@ const TOKEN_KEY = "homestay_token";
 
 export async function uploadImage(imageUri: string): Promise<string> {
   const token = await AsyncStorage.getItem(TOKEN_KEY);
-  const baseUrl = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+  // Use the same base URL as the app configuration
+  const baseUrl = process.env.EXPO_PUBLIC_API_URL 
+    ? process.env.EXPO_PUBLIC_API_URL.replace('/api', '')
+    : "https://homestay-booking--junaid001.replit.app";
 
   const rawFilename = imageUri.split("/").pop()?.split("?")[0] || "photo.jpg";
   const ext = rawFilename.includes(".") ? (rawFilename.split(".").pop()?.toLowerCase() ?? "jpg") : "jpg";
@@ -43,5 +46,17 @@ export async function uploadImage(imageUri: string): Promise<string> {
   }
 
   const result = await response.json();
+  
+  // Handle both url and path formats from API
+  if (result.url) {
+    // If API returns full URL, use it directly
+    if (result.url.startsWith('http')) {
+      return result.url;
+    }
+    // If relative URL, prepend baseUrl
+    return `${baseUrl}${result.url}`;
+  }
+  
+  // Fallback to path format
   return `${baseUrl}${result.path}`;
 }
