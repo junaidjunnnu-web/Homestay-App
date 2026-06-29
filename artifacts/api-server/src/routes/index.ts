@@ -4,15 +4,18 @@ import bookingsRouter from "./bookings";
 import healthRouter from "./health";
 import housekeepingRouter from "./housekeeping";
 import menuRouter from "./menu";
+import messagesRouter from "./messages";
 import notificationsRouter from "./notifications";
 import paymentSettingsRouter from "./paymentSettings";
 import propertiesRouter from "./properties";
 import reviewsRouter from "./reviews";
 import roomsRouter from "./rooms";
+import specialRequestsRouter from "./specialRequests";
 import staffRouter from "./staff";
 import storageRouter from "./storage";
 import transactionsRouter from "./transactions";
 import uploadRouter from "./upload";
+import attractionsRouter from "./attractions";
 
 const router: IRouter = Router();
 
@@ -29,6 +32,9 @@ router.use(uploadRouter);
 router.use(storageRouter);
 router.use(paymentSettingsRouter);
 router.use(transactionsRouter);
+router.use(messagesRouter);
+router.use(specialRequestsRouter);
+router.use(attractionsRouter);
 router.use(notificationsRouter);
 
 export default router;

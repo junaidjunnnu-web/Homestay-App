@@ -12,7 +12,12 @@ function genRef(): string {
 }
 
 function serializeBooking(b: typeof bookingsTable.$inferSelect) {
-  return { ...b, createdAt: b.createdAt.toISOString() };
+  return {
+    ...b,
+    createdAt: b.createdAt.toISOString(),
+    checkInTime: b.checkInTime?.toISOString() || null,
+    checkOutTime: b.checkOutTime?.toISOString() || null,
+  };
 }
 
 async function enrichBooking(booking: typeof bookingsTable.$inferSelect) {
@@ -249,6 +254,54 @@ router.patch("/bookings/:bookingId/status", requireAuth, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "updateBookingStatus error");
     res.status(500).json({ error: "internal", message: "Failed to update booking status" });
+  }
+});
+
+// PATCH check-in guest
+router.patch("/bookings/:bookingId/checkin", requireAuth, async (req, res) => {
+  const user = (req as typeof req & { user: { id: string } }).user;
+  try {
+    const { bookingId } = req.params;
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId)).limit(1);
+    if (!booking) {
+      res.status(404).json({ error: "not_found", message: "Booking not found" });
+      return;
+    }
+    const [room] = await db.select().from(roomsTable).where(eq(roomsTable.id, booking.roomId)).limit(1);
+    const [property] = room ? await db.select().from(propertiesTable).where(eq(propertiesTable.id, room.propertyId)).limit(1) : [null];
+    if (!property || property.hostId !== user.id) {
+      res.status(403).json({ error: "forbidden", message: "Not your booking" });
+      return;
+    }
+    const [updated] = await db.update(bookingsTable).set({ checkInTime: new Date() }).where(eq(bookingsTable.id, bookingId)).returning();
+    res.json(serializeBooking(updated));
+  } catch (err) {
+    req.log.error({ err }, "checkIn error");
+    res.status(500).json({ error: "internal", message: "Failed to check in" });
+  }
+});
+
+// PATCH check-out guest
+router.patch("/bookings/:bookingId/checkout", requireAuth, async (req, res) => {
+  const user = (req as typeof req & { user: { id: string } }).user;
+  try {
+    const { bookingId } = req.params;
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId)).limit(1);
+    if (!booking) {
+      res.status(404).json({ error: "not_found", message: "Booking not found" });
+      return;
+    }
+    const [room] = await db.select().from(roomsTable).where(eq(roomsTable.id, booking.roomId)).limit(1);
+    const [property] = room ? await db.select().from(propertiesTable).where(eq(propertiesTable.id, room.propertyId)).limit(1) : [null];
+    if (!property || property.hostId !== user.id) {
+      res.status(403).json({ error: "forbidden", message: "Not your booking" });
+      return;
+    }
+    const [updated] = await db.update(bookingsTable).set({ checkOutTime: new Date(), status: "completed" }).where(eq(bookingsTable.id, bookingId)).returning();
+    res.json(serializeBooking(updated));
+  } catch (err) {
+    req.log.error({ err }, "checkOut error");
+    res.status(500).json({ error: "internal", message: "Failed to check out" });
   }
 });
 

@@ -13,6 +13,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
@@ -48,8 +49,13 @@ export default function TransactionsScreen() {
   });
 
   const fetchToken = async () => {
-    // Implement token fetching based on your auth context
-    return "";
+    try {
+      const token = await AsyncStorage.getItem("homestay_token");
+      return token || "";
+    } catch (error) {
+      console.error("Failed to fetch token", error);
+      return "";
+    }
   };
 
   const exportToCSV = async () => {

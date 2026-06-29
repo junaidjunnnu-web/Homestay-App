@@ -16,6 +16,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState, useMemo } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   useGetGuestBookings,
   useGetHostBookings,
@@ -25,6 +26,12 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import PaymentModal from "@/components/PaymentModal";
 import GuestPaymentModal from "@/components/GuestPaymentModal";
+import ChatModal from "@/components/ChatModal";
+import SpecialRequestsModal from "@/components/SpecialRequestsModal";
+import UPIQRModal from "@/components/UPIQRModal";
+import TravelGuideModal from "@/components/TravelGuideModal";
+
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
 
 const FILTERS = ["All", "Pending", "Confirmed", "Completed", "Cancelled"];
 const PAYMENT_STATUSES = ["pending", "paid", "partial"] as const;
@@ -56,6 +63,10 @@ export default function BookingsScreen() {
   const [timelineModalVisible, setTimelineModalVisible] = useState(false);
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [guestPaymentModalVisible, setGuestPaymentModalVisible] = useState(false);
+  const [chatModalVisible, setChatModalVisible] = useState(false);
+  const [specialRequestsModalVisible, setSpecialRequestsModalVisible] = useState(false);
+  const [upiQRModalVisible, setUpiQRModalVisible] = useState(false);
+  const [travelGuideModalVisible, setTravelGuideModalVisible] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [notesText, setNotesText] = useState("");
 
@@ -146,29 +157,47 @@ export default function BookingsScreen() {
     setGuestPaymentModalVisible(true);
   };
 
-  const handleCheckIn = (item: any) => {
+  const handleCheckIn = async (item: any) => {
     Alert.alert("Check-In Guest", `Mark ${item.guestName} as checked in?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Check In",
-        onPress: () => {
-          updateStatus({ bookingId: item.id, data: { status: "confirmed" } }, {
-            onSuccess: () => refetch(),
-          });
+        onPress: async () => {
+          try {
+            const token = await AsyncStorage.getItem("homestay_token");
+            const response = await fetch(`${API_BASE}/bookings/${item.id}/checkin`, {
+              method: "PATCH",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error("Failed to check in");
+            Alert.alert("Success", "Guest checked in successfully");
+            refetch();
+          } catch (error) {
+            Alert.alert("Error", "Failed to check in guest");
+          }
         },
       },
     ]);
   };
 
-  const handleCheckOut = (item: any) => {
+  const handleCheckOut = async (item: any) => {
     Alert.alert("Check-Out Guest", `Mark ${item.guestName} as checked out?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Check Out",
-        onPress: () => {
-          updateStatus({ bookingId: item.id, data: { status: "completed" } }, {
-            onSuccess: () => refetch(),
-          });
+        onPress: async () => {
+          try {
+            const token = await AsyncStorage.getItem("homestay_token");
+            const response = await fetch(`${API_BASE}/bookings/${item.id}/checkout`, {
+              method: "PATCH",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error("Failed to check out");
+            Alert.alert("Success", "Guest checked out successfully");
+            refetch();
+          } catch (error) {
+            Alert.alert("Error", "Failed to check out guest");
+          }
         },
       },
     ]);
@@ -188,6 +217,26 @@ export default function BookingsScreen() {
   const openTimelineModal = (item: any) => {
     setSelectedBooking(item);
     setTimelineModalVisible(true);
+  };
+
+  const openChat = (item: any) => {
+    setSelectedBooking(item);
+    setChatModalVisible(true);
+  };
+
+  const openSpecialRequests = (item: any) => {
+    setSelectedBooking(item);
+    setSpecialRequestsModalVisible(true);
+  };
+
+  const openUPIQR = (item: any) => {
+    setSelectedBooking(item);
+    setUpiQRModalVisible(true);
+  };
+
+  const openTravelGuide = (item: any) => {
+    setSelectedBooking(item);
+    setTravelGuideModalVisible(true);
   };
 
   const saveNotes = () => {
@@ -280,6 +329,11 @@ Thank you for your booking!
             <Text style={[styles.dateValue, { color: colors.foreground }]}>
               {checkIn.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
             </Text>
+            {item.checkInTime && (
+              <Text style={[styles.timeText, { color: colors.success }]}>
+                {new Date(item.checkInTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+              </Text>
+            )}
           </View>
           <View style={[styles.nightsBadge, { borderColor: colors.border }]}>
             <Feather name="moon" size={11} color={colors.mutedForeground} />
@@ -290,6 +344,11 @@ Thank you for your booking!
             <Text style={[styles.dateValue, { color: colors.foreground }]}>
               {checkOut.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
             </Text>
+            {item.checkOutTime && (
+              <Text style={[styles.timeText, { color: colors.success }]}>
+                {new Date(item.checkOutTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -309,92 +368,127 @@ Thank you for your booking!
         </View>
 
         {/* Actions */}
-        <View style={styles.actionsRow}>
-          {isHost && item.status === "pending" && (
+        <View style={styles.actionsContainer}>
+          {/* Row 1 - Primary Actions */}
+          <View style={styles.actionsRow}>
+            {isHost && item.status === "pending" && (
+              <Pressable
+                style={[styles.actionBtn, { backgroundColor: colors.success }]}
+                onPress={() => confirmBooking(item.id)}
+              >
+                <Feather name="check" size={15} color="#fff" />
+                <Text style={styles.actionBtnText}>Confirm</Text>
+              </Pressable>
+            )}
+            {isHost && item.status === "confirmed" && (
+              <Pressable
+                style={[styles.actionBtn, { backgroundColor: "#3B82F6" }]}
+                onPress={() => handleCheckIn(item)}
+              >
+                <Ionicons name="log-in-outline" size={15} color="#fff" />
+                <Text style={styles.actionBtnText}>Check-In</Text>
+              </Pressable>
+            )}
+            {isHost && item.status === "confirmed" && (
+              <Pressable
+                style={[styles.actionBtn, { backgroundColor: "#10B981" }]}
+                onPress={() => handleCheckOut(item)}
+              >
+                <Ionicons name="log-out-outline" size={15} color="#fff" />
+                <Text style={styles.actionBtnText}>Check-Out</Text>
+              </Pressable>
+            )}
+            {isHost && (
+              <Pressable
+                style={[styles.actionBtn, { backgroundColor: "#8B5CF6" }]}
+                onPress={() => {
+                  setSelectedBooking(item);
+                  setPaymentModalVisible(true);
+                }}
+              >
+                <Feather name="credit-card" size={15} color="#fff" />
+                <Text style={styles.actionBtnText}>Payment</Text>
+              </Pressable>
+            )}
+            {!isHost && item.status === "confirmed" && item.property?.upiId && (
+              <Pressable style={[styles.actionBtn, { backgroundColor: colors.primary }]} onPress={() => openUPIQR(item)}>
+                <Ionicons name="qr-code" size={15} color="#fff" />
+                <Text style={styles.actionBtnText}>Pay via UPI</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {/* Row 2 - Secondary Actions */}
+          <View style={styles.actionsRow}>
             <Pressable
-              style={[styles.actionBtn, { backgroundColor: colors.success }]}
-              onPress={() => confirmBooking(item.id)}
+              style={[styles.actionBtn, { backgroundColor: "#EC4899" }]}
+              onPress={() => openSpecialRequests(item)}
             >
-              <Feather name="check" size={15} color="#fff" />
-              <Text style={styles.actionBtnText}>Confirm</Text>
+              <Ionicons name="gift" size={15} color="#fff" />
+              <Text style={styles.actionBtnText}>Requests</Text>
             </Pressable>
-          )}
-          {isHost && item.status === "confirmed" && (
             <Pressable
-              style={[styles.actionBtn, { backgroundColor: "#3B82F6" }]}
-              onPress={() => handleCheckIn(item)}
+              style={[styles.actionBtn, { backgroundColor: "#E8824A" }]}
+              onPress={() => openNotesModal(item)}
             >
-              <Ionicons name="log-in-outline" size={15} color="#fff" />
-              <Text style={styles.actionBtnText}>Check-In</Text>
+              <Feather name="file-text" size={15} color="#fff" />
+              <Text style={styles.actionBtnText}>Notes</Text>
             </Pressable>
-          )}
-          {isHost && item.status === "confirmed" && (
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: "#10B981" }]}
-              onPress={() => handleCheckOut(item)}
-            >
-              <Ionicons name="log-out-outline" size={15} color="#fff" />
-              <Text style={styles.actionBtnText}>Check-Out</Text>
-            </Pressable>
-          )}
-          {isHost && (
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: "#8B5CF6" }]}
-              onPress={() => togglePaymentStatus(item)}
-            >
-              <Feather name="credit-card" size={15} color="#fff" />
-              <Text style={styles.actionBtnText}>Payment</Text>
-            </Pressable>
-          )}
-          <Pressable
-            style={[styles.actionBtn, { backgroundColor: "#E8824A" }]}
-            onPress={() => openNotesModal(item)}
-          >
-            <Feather name="file-text" size={15} color="#fff" />
-            <Text style={styles.actionBtnText}>Notes</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.actionBtn, { backgroundColor: "#25D366" }]}
-            onPress={() => shareInvoiceViaWhatsApp(item)}
-          >
-            <Ionicons name="logo-whatsapp" size={15} color="#fff" />
-            <Text style={styles.actionBtnText}>Invoice</Text>
-          </Pressable>
-          {!isHost && (
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: "#6366F1" }]}
-              onPress={() => openTimelineModal(item)}
-            >
-              <Feather name="clock" size={15} color="#fff" />
-              <Text style={styles.actionBtnText}>Timeline</Text>
-            </Pressable>
-          )}
-          {!isHost && item.property?.phone && (
             <Pressable
               style={[styles.actionBtn, { backgroundColor: "#25D366" }]}
-              onPress={() => {
-                const msg = `Hi! I have a booking at ${item.property?.name} (Ref: #${item.referenceNumber}) from ${item.checkIn} to ${item.checkOut}. I have a question about my booking.`;
-                Linking.openURL(`https://wa.me/91${item.property.phone}?text=${encodeURIComponent(msg)}`);
-              }}
+              onPress={() => shareInvoiceViaWhatsApp(item)}
             >
               <Ionicons name="logo-whatsapp" size={15} color="#fff" />
-              <Text style={styles.actionBtnText}>Host</Text>
+              <Text style={styles.actionBtnText}>Invoice</Text>
             </Pressable>
-          )}
-          {!isHost && item.status === "confirmed" && item.property?.upiId && (
-            <Pressable style={[styles.actionBtn, { backgroundColor: colors.primary }]} onPress={() => openUPI(item)}>
-              <Ionicons name="qr-code" size={15} color="#fff" />
-              <Text style={styles.actionBtnText}>Pay via UPI</Text>
-            </Pressable>
-          )}
-          {isActive && (
             <Pressable
-              style={[styles.actionBtn, { borderWidth: 1, borderColor: colors.destructive, backgroundColor: "transparent" }]}
-              onPress={() => cancelBooking(item.id)}
+              style={[styles.actionBtn, { backgroundColor: "#8B5CF6" }]}
+              onPress={() => openChat(item)}
             >
-              <Text style={[styles.actionBtnText, { color: colors.destructive }]}>Cancel</Text>
+              <Ionicons name="chatbubble-outline" size={15} color="#fff" />
+              <Text style={styles.actionBtnText}>Chat</Text>
             </Pressable>
-          )}
+          </View>
+
+          {/* Row 3 - Additional Actions */}
+          <View style={styles.actionsRow}>
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: "#06B6D4" }]}
+              onPress={() => openTravelGuide(item)}
+            >
+              <Ionicons name="map-outline" size={15} color="#fff" />
+              <Text style={styles.actionBtnText}>Guide</Text>
+            </Pressable>
+            {!isHost && (
+              <Pressable
+                style={[styles.actionBtn, { backgroundColor: "#6366F1" }]}
+                onPress={() => openTimelineModal(item)}
+              >
+                <Feather name="clock" size={15} color="#fff" />
+                <Text style={styles.actionBtnText}>Timeline</Text>
+              </Pressable>
+            )}
+            {!isHost && item.property?.phone && (
+              <Pressable
+                style={[styles.actionBtn, { backgroundColor: "#25D366" }]}
+                onPress={() => {
+                  const msg = `Hi! I have a booking at ${item.property?.name} (Ref: #${item.referenceNumber}) from ${item.checkIn} to ${item.checkOut}. I have a question about my booking.`;
+                  Linking.openURL(`https://wa.me/91${item.property.phone}?text=${encodeURIComponent(msg)}`);
+                }}
+              >
+                <Ionicons name="logo-whatsapp" size={15} color="#fff" />
+                <Text style={styles.actionBtnText}>Host</Text>
+              </Pressable>
+            )}
+            {isActive && (
+              <Pressable
+                style={[styles.actionBtn, { borderWidth: 1, borderColor: colors.destructive, backgroundColor: "transparent" }]}
+                onPress={() => cancelBooking(item.id)}
+              >
+                <Text style={[styles.actionBtnText, { color: colors.destructive }]}>Cancel</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -684,6 +778,35 @@ Thank you for your booking!
         booking={selectedBooking}
         onSuccess={() => refetch()}
       />
+
+      <ChatModal
+        visible={chatModalVisible}
+        onClose={() => setChatModalVisible(false)}
+        booking={selectedBooking}
+        currentUser={user}
+      />
+
+      <SpecialRequestsModal
+        visible={specialRequestsModalVisible}
+        onClose={() => setSpecialRequestsModalVisible(false)}
+        booking={selectedBooking}
+        onSuccess={() => refetch()}
+      />
+
+      <UPIQRModal
+        visible={upiQRModalVisible}
+        onClose={() => setUpiQRModalVisible(false)}
+        upiId={selectedBooking?.property?.upiId || ""}
+        amount={selectedBooking?.totalAmount || 0}
+        bookingRef={selectedBooking?.referenceNumber || ""}
+        property={selectedBooking?.property?.name}
+      />
+
+      <TravelGuideModal
+        visible={travelGuideModalVisible}
+        onClose={() => setTravelGuideModalVisible(false)}
+        property={selectedBooking?.property}
+      />
     </View>
   );
 }
@@ -786,6 +909,7 @@ const styles = StyleSheet.create({
   dateBlock: { flex: 1 },
   dateLabel: { fontSize: 9, fontWeight: "800", marginBottom: 4 },
   dateValue: { fontSize: 13, fontWeight: "700" },
+  timeText: { fontSize: 10, fontWeight: "600", marginTop: 2 },
   nightsBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -807,6 +931,7 @@ const styles = StyleSheet.create({
   amountValue: { fontSize: 20, fontWeight: "800" },
   payBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   payText: { fontSize: 10, fontWeight: "800" },
+  actionsContainer: { gap: 10 },
   actionsRow: { flexDirection: "row", gap: 10 },
   actionBtn: {
     flex: 1,

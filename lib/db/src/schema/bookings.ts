@@ -10,12 +10,14 @@ export const bookingsTable = pgTable("bookings", {
   guestId: uuid("guest_id").references(() => usersTable.id, { onDelete: "set null" }),
   checkIn: date("check_in", { mode: "string" }).notNull(),
   checkOut: date("check_out", { mode: "string" }).notNull(),
+  checkInTime: timestamp("check_in_time", { withTimezone: true }),
+  checkOutTime: timestamp("check_out_time", { withTimezone: true }),
   guestCount: integer("guest_count").notNull().default(1),
   status: text("status", { enum: ["pending", "confirmed", "cancelled", "completed"] }).notNull().default("pending"),
   totalAmount: doublePrecision("total_amount").notNull(),
   paymentStatus: text("payment_status", { enum: ["pending", "partial", "paid", "refunded"] }).notNull().default("pending"),
-  paymentMethod: text("payment_method", { 
-    enum: ["cash", "upi", "bank_transfer", "card", "google_pay", "phonepe", "paytm"] 
+  paymentMethod: text("payment_method", {
+    enum: ["cash", "upi", "bank_transfer", "card", "google_pay", "phonepe", "paytm"]
   }),
   paidAmount: doublePrecision("paid_amount").notNull().default(0),
   paymentDueDate: date("payment_due_date", { mode: "string" }),

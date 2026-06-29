@@ -13,8 +13,9 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -59,30 +60,31 @@ export default function PaymentSettingsScreen() {
       return response.json();
     },
     enabled: !!user,
-    onSuccess: (data) => {
-      if (data) {
-        setFormData({
-          acceptedPaymentMethods: data.acceptedPaymentMethods || ["cash"],
-          defaultPaymentMethod: data.defaultPaymentMethod || "cash",
-          upiId: data.upiId || "",
-          bankDetails: data.bankDetails || {
-            accountNumber: "",
-            ifscCode: "",
-            beneficiaryName: "",
-            bankName: "",
-          },
-          googlePayHandle: data.googlePayHandle || "",
-          phonepeHandle: data.phonepeHandle || "",
-          paytmNumber: data.paytmNumber || "",
-          paymentTerms: data.paymentTerms || "on_arrival",
-          advancePaymentPercentage: data.advancePaymentPercentage || "50",
-          cancellationRefundPolicy: data.cancellationRefundPolicy || "",
-          allowDelayedPayment: data.allowDelayedPayment || false,
-          delayedPaymentDays: data.delayedPaymentDays || "3",
-        });
-      }
-    },
   });
+
+  useEffect(() => {
+    if (settings) {
+      setFormData({
+        acceptedPaymentMethods: settings.acceptedPaymentMethods || ["cash"],
+        defaultPaymentMethod: settings.defaultPaymentMethod || "cash",
+        upiId: settings.upiId || "",
+        bankDetails: settings.bankDetails || {
+          accountNumber: "",
+          ifscCode: "",
+          beneficiaryName: "",
+          bankName: "",
+        },
+        googlePayHandle: settings.googlePayHandle || "",
+        phonepeHandle: settings.phonepeHandle || "",
+        paytmNumber: settings.paytmNumber || "",
+        paymentTerms: settings.paymentTerms || "on_arrival",
+        advancePaymentPercentage: settings.advancePaymentPercentage || "50",
+        cancellationRefundPolicy: settings.cancellationRefundPolicy || "",
+        allowDelayedPayment: settings.allowDelayedPayment || false,
+        delayedPaymentDays: settings.delayedPaymentDays || "3",
+      });
+    }
+  }, [settings]);
 
   const mutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -108,8 +110,13 @@ export default function PaymentSettingsScreen() {
   });
 
   const fetchToken = async () => {
-    // Implement token fetching logic based on your auth context
-    return user?.token || "";
+    try {
+      const token = await AsyncStorage.getItem("homestay_token");
+      return token || "";
+    } catch (error) {
+      console.error("Failed to fetch token", error);
+      return "";
+    }
   };
 
   const togglePaymentMethod = (method: string) => {

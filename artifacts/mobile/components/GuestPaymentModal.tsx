@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -64,8 +65,13 @@ export default function GuestPaymentModal({ visible, onClose, booking, onSuccess
   });
 
   const fetchToken = async () => {
-    // Implement token fetching based on your auth context
-    return "";
+    try {
+      const token = await AsyncStorage.getItem("homestay_token");
+      return token || "";
+    } catch (error) {
+      console.error("Failed to fetch token", error);
+      return "";
+    }
   };
 
   const generateUPIUrl = () => {

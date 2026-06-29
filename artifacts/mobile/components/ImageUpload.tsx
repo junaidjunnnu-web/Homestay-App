@@ -40,8 +40,7 @@ export default function ImageUpload({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsMultipleSelection: true,
-        aspect: [4, 3],
-        quality: 0.8,
+        quality: 0.85,
         selectionLimit: maxImages - images.length,
       });
 
@@ -74,8 +73,7 @@ export default function ImageUpload({
     try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
-        aspect: [4, 3],
-        quality: 0.8,
+        quality: 0.85,
       });
 
       if (!result.canceled && result.assets[0]) {

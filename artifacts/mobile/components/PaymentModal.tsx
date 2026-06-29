@@ -12,9 +12,11 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
+import UPIScannerModal from "@/components/UPIScannerModal";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
 
@@ -36,6 +38,7 @@ export default function PaymentModal({ visible, onClose, booking, onSuccess }: P
   const [notes, setNotes] = useState("");
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [scannerVisible, setScannerVisible] = useState(false);
 
   const paymentMethods = [
     { id: "cash", label: "Cash", icon: "dollar-sign", color: "#10B981" },
@@ -58,25 +61,34 @@ export default function PaymentModal({ visible, onClose, booking, onSuccess }: P
         },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error("Failed to record payment");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to record payment");
+      }
       return response.json();
     },
     onSuccess: () => {
       Alert.alert("Success", "Payment recorded successfully");
       queryClient.invalidateQueries({ queryKey: ["hostBookings"] });
+      queryClient.invalidateQueries({ queryKey: ["guestBookings"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       onSuccess();
       onClose();
       resetForm();
     },
-    onError: () => {
-      Alert.alert("Error", "Failed to record payment");
+    onError: (error: any) => {
+      Alert.alert("Error", error.message || "Failed to record payment");
     },
   });
 
   const fetchToken = async () => {
-    // Implement token fetching based on your auth context
-    return "";
+    try {
+      const token = await AsyncStorage.getItem("homestay_token");
+      return token || "";
+    } catch (error) {
+      console.error("Failed to fetch token", error);
+      return "";
+    }
   };
 
   const pickImage = async () => {
@@ -163,6 +175,16 @@ export default function PaymentModal({ visible, onClose, booking, onSuccess }: P
     setNotes("");
     setProofImage(null);
     setUploadProgress(0);
+  };
+
+  const handleQRScanned = (data: string) => {
+    // Extract transaction ID from UPI link if present
+    const match = data.match(/tn=([^&]+)/);
+    if (match) {
+      setTransactionId(decodeURIComponent(match[1]));
+    }
+    setScannerVisible(false);
+    Alert.alert("QR Scanned", "Payment QR code detected. Please verify the transaction ID.");
   };
 
   const generateUPIUrl = () => {
@@ -274,7 +296,15 @@ export default function PaymentModal({ visible, onClose, booking, onSuccess }: P
 
             {(paymentMethod === "upi" || paymentMethod === "bank_transfer" || paymentMethod === "card") && (
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Transaction ID / Reference</Text>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Transaction ID / Reference</Text>
+                  {paymentMethod === "upi" && (
+                    <Pressable onPress={() => setScannerVisible(true)} style={styles.scanBtn}>
+                      <Ionicons name="qr-code-outline" size={18} color="#3B82F6" />
+                      <Text style={styles.scanBtnText}>Scan QR</Text>
+                    </Pressable>
+                  )}
+                </View>
                 <TextInput
                   style={[styles.textInput, { borderColor: colors.border, color: colors.foreground }]}
                   value={transactionId}
@@ -338,6 +368,12 @@ export default function PaymentModal({ visible, onClose, booking, onSuccess }: P
           </ScrollView>
         </View>
       </View>
+
+      <UPIScannerModal
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onScanned={handleQRScanned}
+      />
     </Modal>
   );
 }
@@ -420,11 +456,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   formGroup: { marginBottom: 16 },
+  labelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
   label: {
     fontSize: 14,
     fontWeight: "700",
     color: "#8A7A6E",
-    marginBottom: 8,
+  },
+  scanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#3B82F610",
+  },
+  scanBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#3B82F6",
   },
   textInput: {
     height: 50,
