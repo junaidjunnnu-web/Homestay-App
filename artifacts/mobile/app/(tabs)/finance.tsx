@@ -119,7 +119,8 @@ export default function FinanceScreen() {
   const cancelledCount = (allBookings as any[]).filter(b => b.status === "cancelled").length;
   const avgBookingValue = confirmedCount > 0 ? Math.round(totalBookingsValue / confirmedCount) : 0;
 
-  const totalExpenses = 0;
+  const expenses: { id: string; category: string; amount: number }[] = [];
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
   const netProfit = totalRevenue - totalExpenses;
   const gstAmount = totalRevenue * 0.18;
   const revenueAfterGST = totalRevenue - gstAmount;

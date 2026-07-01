@@ -12,6 +12,7 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import { useColors } from "@/hooks/useColors";
 import * as ImagePicker from "expo-image-picker";
+import { uploadImage } from "@/utils/uploadImage";
 
 interface ImageUploadProps {
   images: string[];
@@ -90,44 +91,12 @@ export default function ImageUpload({
     setUploading(true);
     setUploadProgress(0);
 
-    // Use the same base URL as the app configuration
-    const baseUrl = process.env.EXPO_PUBLIC_API_URL 
-      ? process.env.EXPO_PUBLIC_API_URL.replace('/api', '')
-      : "https://homestay-booking--junaid001.replit.app";
     const uploadedUrls: string[] = [];
 
     try {
       for (let i = 0; i < uris.length; i++) {
-        const fileType = uris[i].toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
-        const extension = fileType === "image/png" ? "png" : "jpg";
-        const formData = new FormData();
-        formData.append("file", {
-          uri: uris[i],
-          type: fileType,
-          name: `image_${Date.now()}_${i}.${extension}`,
-        } as any);
-
-        const response = await fetch(`${baseUrl}/api/upload`, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => "Unknown error");
-          console.error("Upload failed:", errorText);
-          throw new Error(`Upload failed: ${errorText}`);
-        }
-
-        const data = await response.json();
-        
-        // Handle both url and path formats
-        let imageUrl = data.url;
-        if (imageUrl && !imageUrl.startsWith('http')) {
-          imageUrl = `${baseUrl}${imageUrl}`;
-        }
-        
+        const imageUrl = await uploadImage(uris[i]);
         uploadedUrls.push(imageUrl);
-
         setUploadProgress(((i + 1) / uris.length) * 100);
       }
 

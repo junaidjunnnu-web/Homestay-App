@@ -1,12 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import { getApiBaseUrl, getServerBaseUrl } from "./api";
+import { getApiBaseUrl } from "./api";
 
 const TOKEN_KEY = "homestay_token";
 
 export async function uploadImage(imageUri: string): Promise<string> {
   const token = await AsyncStorage.getItem(TOKEN_KEY);
-  const baseUrl = getServerBaseUrl();
   const apiUrl = getApiBaseUrl();
 
   const rawFilename = imageUri.split("/").pop()?.split("?")[0] || "photo.jpg";
@@ -44,12 +43,17 @@ export async function uploadImage(imageUri: string): Promise<string> {
 
   const result = await response.json();
 
+  // Store relative paths in the DB so every device resolves against its configured API base URL.
   if (result.url) {
-    if (result.url.startsWith("http")) {
-      return result.url;
-    }
-    return `${baseUrl}${result.url}`;
+    const uploadMatch = String(result.url).match(/\/api\/uploads\/[^/?#]+/);
+    if (uploadMatch) return uploadMatch[0];
+    if (result.url.startsWith("/")) return result.url;
+    return result.url;
   }
 
-  return `${baseUrl}${result.path}`;
+  if (result.path) {
+    return result.path.startsWith("/") ? result.path : `/${result.path}`;
+  }
+
+  throw new Error("Upload response missing url");
 }

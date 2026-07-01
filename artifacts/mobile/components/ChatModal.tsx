@@ -62,8 +62,8 @@ export default function ChatModal({ visible, onClose, booking, currentUser }: Ch
       if (!response.ok) throw new Error("Failed to fetch messages");
       return response.json();
     },
-    enabled: !!booking?.id,
-    refetchInterval: 5000, // Poll every 5 seconds for new messages
+    enabled: visible && !!booking?.id,
+    refetchInterval: visible ? 5000 : false,
   });
 
   const sendMessageMutation = useMutation({

@@ -284,8 +284,9 @@ router.get("/transactions/dashboard", requireAuth, async (req, res) => {
       res.json({
         totalCollected: 0,
         pendingAmount: 0,
-        completedTransactions: 0,
-        pendingTransactions: 0,
+        completedTransactionsLength: 0,
+        pendingTransactionsLength: 0,
+        pendingBookings: [],
         recentTransactions: [],
       });
       return;

@@ -53,7 +53,7 @@ export default function TravelGuideModal({ visible, onClose, property, guestMobi
       }
       return response.json();
     },
-    enabled: !!property?.id,
+    enabled: visible && !!property?.id,
   });
 
   const filteredAttractions = selectedCategory === "all"

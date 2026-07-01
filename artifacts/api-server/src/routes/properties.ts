@@ -6,6 +6,17 @@ import { requireAuth, requireHost } from "../middlewares/auth";
 
 const router = Router();
 
+function normalizePhotoUrls(photos: string[] | undefined): string[] {
+  if (!photos?.length) return [];
+  return photos.map((photo) => {
+    const uploadMatch = photo.match(/\/api\/uploads\/[^/?#]+/);
+    if (uploadMatch) return uploadMatch[0];
+    const storageMatch = photo.match(/\/api\/storage\/[^?#]+/);
+    if (storageMatch) return storageMatch[0];
+    return photo;
+  });
+}
+
 function serializeProperty(p: typeof propertiesTable.$inferSelect & { averageRating?: number | null; reviewCount?: number | null; minPrice?: number | null }) {
   return {
     ...p,
@@ -174,7 +185,7 @@ router.post("/properties", requireHost, async (req, res) => {
       city,
       state,
       bookingMode,
-      photos: photos || [],
+      photos: normalizePhotoUrls(photos || []),
       description: description || null,
       amenities: amenities || [],
       mealsIncluded: mealsIncluded ?? false,
@@ -210,7 +221,11 @@ router.put("/properties/:propertyId", requireAuth, async (req, res) => {
     const updates: Partial<typeof propertiesTable.$inferInsert> = {};
     const fields = ["name", "address", "city", "state", "bookingMode", "photos", "description", "amenities", "mealsIncluded", "locationLat", "locationLng", "nearbyAttractions", "upiId", "bankDetails", "cancellationPolicy", "status", "phone"] as const;
     for (const f of fields) {
-      if (req.body[f] !== undefined) (updates as Record<string, unknown>)[f] = req.body[f];
+      if (req.body[f] !== undefined) {
+        (updates as Record<string, unknown>)[f] = f === "photos"
+          ? normalizePhotoUrls(req.body[f])
+          : req.body[f];
+      }
     }
     const [updated] = await db.update(propertiesTable).set(updates).where(eq(propertiesTable.id, propertyId)).returning();
     res.json({ ...updated, createdAt: updated.createdAt.toISOString() });

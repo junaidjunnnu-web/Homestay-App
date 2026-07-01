@@ -234,7 +234,7 @@ async function downloadBundle(platform, timestamp) {
   url.searchParams.set("platform", platform);
   url.searchParams.set("dev", "false");
   url.searchParams.set("hot", "false");
-  url.searchParams.set("lazy", "false");
+  url.searchParams.set("lazy", "true");
   url.searchParams.set("minify", "true");
 
   const output = path.join(

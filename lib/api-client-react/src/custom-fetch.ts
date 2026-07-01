@@ -36,21 +36,32 @@ export function setBaseUrl(url: string | null): void {
  * @param imagePath - The image path (can be relative like "/api/storage/objects/..." or absolute)
  * @returns The full URL with base URL prepended if needed
  */
-export function getFullImageUrl(imagePath: string | undefined): string {
+/** Strip host-specific base from stored upload URLs so all devices resolve against the current API. */
+export function normalizeImagePath(imagePath: string | undefined): string {
   if (!imagePath) return "";
-  
-  // If already a full URL (starts with http:// or https://), return as-is
-  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
-    return imagePath;
-  }
-  
-  // If relative path (starts with /), prepend base URL
-  if (imagePath.startsWith("/") && _baseUrl) {
-    return `${_baseUrl}${imagePath}`;
-  }
-  
-  // Otherwise return as-is
+
+  const uploadMatch = imagePath.match(/\/api\/uploads\/[^/?#]+/);
+  if (uploadMatch) return uploadMatch[0];
+
+  const storageMatch = imagePath.match(/\/api\/storage\/[^?#]+/);
+  if (storageMatch) return storageMatch[0];
+
   return imagePath;
+}
+
+export function getFullImageUrl(imagePath: string | undefined): string {
+  const normalized = normalizeImagePath(imagePath);
+  if (!normalized) return "";
+
+  if (normalized.startsWith("/") && _baseUrl) {
+    return `${_baseUrl}${normalized}`;
+  }
+
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+    return normalized;
+  }
+
+  return normalized;
 }
 
 /**

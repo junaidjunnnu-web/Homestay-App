@@ -18,12 +18,18 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { getServerBaseUrl } from "@/utils/api";
 import { setBaseUrl } from "@workspace/api-client-react";
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 setBaseUrl(getServerBaseUrl());
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+    },
+  },
+});
 
 function RootLayoutNav() {
   return (
@@ -51,7 +57,9 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
 
   return (
     <SafeAreaProvider>

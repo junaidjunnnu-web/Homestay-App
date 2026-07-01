@@ -19,6 +19,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName={isHost ? "dashboard" : "index"}
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,

@@ -13,7 +13,8 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCreateProperty, useUpdateProperty, useGetProperty, getFullImageUrl } from "@workspace/api-client-react";
+import { useCreateProperty, useUpdateProperty, useGetProperty, getFullImageUrl, getGetHostPropertiesQueryKey, getGetPropertiesQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import * as ImagePicker from "expo-image-picker";
 import { uploadImage } from "@/utils/uploadImage";
@@ -26,6 +27,12 @@ export default function AddPropertyScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const invalidatePropertyQueries = () => {
+    queryClient.invalidateQueries({ queryKey: getGetHostPropertiesQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetPropertiesQueryKey() });
+  };
 
   const { data: existingProperty } = useGetProperty(id!, { query: { enabled: isEditing } as any });
   const { mutate: createProperty, isPending: isCreating } = useCreateProperty();
@@ -114,6 +121,7 @@ export default function AddPropertyScreen() {
     if (isEditing) {
       updateProperty({ propertyId: id!, ...payload }, {
         onSuccess: () => {
+          invalidatePropertyQueries();
           Alert.alert("Success", "Property updated successfully");
           router.back();
         },
@@ -122,6 +130,7 @@ export default function AddPropertyScreen() {
     } else {
       createProperty(payload, {
         onSuccess: () => {
+          invalidatePropertyQueries();
           Alert.alert("Success", "Property created successfully! Add rooms next.");
           router.back();
         },
