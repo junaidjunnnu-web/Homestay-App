@@ -7,6 +7,15 @@ export function getServerBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL.replace(/\/api\/?$/, "");
   }
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  if (process.env.EXPO_PUBLIC_DOMAIN) {
+    return `https://${process.env.EXPO_PUBLIC_DOMAIN.replace(/^https?:\/\//, "")}`;
+  }
+
   return "https://homestay-booking--junaid001.replit.app";
 }
 

@@ -28,6 +28,19 @@ export default function Root({ children }: { children: React.ReactNode }) {
         {/* iOS icons (fallback from icon.png) */}
         <link rel="apple-touch-icon" href="/icon.png" />
 
+        {/* Service worker for installable PWA (Android Chrome + offline shell) */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function () {
+                  navigator.serviceWorker.register('/sw.js').catch(function () {});
+                });
+              }
+            `,
+          }}
+        />
+
         {/* Remove scroll bounce / overscroll */}
         <ScrollViewStyleReset />
 
