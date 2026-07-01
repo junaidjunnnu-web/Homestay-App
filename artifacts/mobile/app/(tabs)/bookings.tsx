@@ -16,7 +16,6 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState, useMemo } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   useGetGuestBookings,
   useGetHostBookings,
@@ -30,8 +29,8 @@ import ChatModal from "@/components/ChatModal";
 import SpecialRequestsModal from "@/components/SpecialRequestsModal";
 import UPIQRModal from "@/components/UPIQRModal";
 import TravelGuideModal from "@/components/TravelGuideModal";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+import { apiFetch } from "@/utils/api";
+import { openWhatsApp, normalizePhone } from "@/utils/whatsapp";
 
 const FILTERS = ["All", "Pending", "Confirmed", "Completed", "Cancelled"];
 const PAYMENT_STATUSES = ["pending", "paid", "partial"] as const;
@@ -72,6 +71,8 @@ export default function BookingsScreen() {
 
   const isHost = user?.role === "host";
 
+  const normalizePhoneLocal = (raw: string | number | undefined | null) => normalizePhone(raw);
+
   const guestQuery = useGetGuestBookings({ query: { enabled: !isHost && !!user } } as any);
   const hostQuery = useGetHostBookings(
     {}, // Get all bookings without status filter initially
@@ -84,6 +85,14 @@ export default function BookingsScreen() {
   const isLoading = isHost ? hostQuery.isLoading : guestQuery.isLoading;
   const refetch = isHost ? hostQuery.refetch : guestQuery.refetch;
   const isRefetching = isHost ? hostQuery.isRefetching : guestQuery.isRefetching;
+
+  const refreshBookings = async () => {
+    try {
+      await refetch();
+    } catch (error) {
+      console.warn("Failed to refresh bookings", error);
+    }
+  };
 
   // Which dates have at least one booking (for host calendar strip)
   const bookedDates = useMemo(() => {
@@ -121,6 +130,7 @@ export default function BookingsScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "confirmed": return colors.success;
+      case "checked_in": return "#3B82F6";
       case "pending": return colors.warning;
       case "cancelled": return colors.destructive;
       case "completed": return "#7C3AED";
@@ -130,22 +140,30 @@ export default function BookingsScreen() {
 
   const confirmBooking = (id: string) => {
     updateStatus({ bookingId: id, data: { status: "confirmed" } }, {
-      onSuccess: () => refetch(),
+      onSuccess: () => refreshBookings(),
     });
   };
 
   const cancelBooking = (id: string) => {
     updateStatus({ bookingId: id, data: { status: "cancelled" } }, {
-      onSuccess: () => refetch(),
+      onSuccess: () => refreshBookings(),
     });
   };
 
-  const sendWhatsAppToGuest = (item: any) => {
-    const mobile = item.guestMobile;
+  const sendWhatsAppToGuest = (item: any, eventLabel?: string) => {
+    const mobile = normalizePhoneLocal(item.guestMobile);
     if (!mobile) return;
-    const status = item.status === "confirmed" ? "confirmed ✅" : "received";
-    const msg = `Hi ${item.guestName}! 🏡\n\nYour booking at ${item.property?.name || "our homestay"} has been ${status}.\n\n📋 Reference: #${item.referenceNumber}\n📅 Check-in: ${item.checkIn}\n📅 Check-out: ${item.checkOut}\n🛏 Room: ${item.room?.name}\n💰 Amount: ₹${item.totalAmount?.toLocaleString("en-IN")}\n\nLooking forward to hosting you! 😊`;
-    Linking.openURL(`https://wa.me/91${mobile}?text=${encodeURIComponent(msg)}`);
+    const status = eventLabel
+      ? `${eventLabel} ✅`
+      : item.status === "confirmed"
+      ? "confirmed ✅"
+      : item.status === "checked_in"
+      ? "checked in ✅"
+      : item.status === "completed"
+      ? "completed ✅"
+      : "received";
+    const msg = `Hi ${item.guestName}! 🏡\n\nYour booking at ${item.property?.name || "our homestay"} has been ${status}.\n\n📋 Reference: #${item.referenceNumber}\n📅 Check-in: ${item.checkIn}\n📅 Check-out: ${item.checkOut}\n🛏 Room: ${item.room?.name}\n💰 Amount: ₹${item.totalAmount?.toLocaleString("en-IN")}\n\nIf you have any questions, feel free to reply here. 😊`;
+    Linking.openURL(`https://wa.me/${mobile}?text=${encodeURIComponent(msg)}`);
   };
 
   const openUPI = (item: any) => {
@@ -164,14 +182,11 @@ export default function BookingsScreen() {
         text: "Check In",
         onPress: async () => {
           try {
-            const token = await AsyncStorage.getItem("homestay_token");
-            const response = await fetch(`${API_BASE}/bookings/${item.id}/checkin`, {
-              method: "PATCH",
-              headers: { Authorization: `Bearer ${token}` },
-            });
+            const response = await apiFetch(`/bookings/${item.id}/checkin`, { method: "PATCH" });
             if (!response.ok) throw new Error("Failed to check in");
-            Alert.alert("Success", "Guest checked in successfully");
-            refetch();
+            await refreshBookings();
+            sendWhatsAppToGuest(item, "checked in");
+            Alert.alert("Success", "Guest checked in successfully. WhatsApp notification sent.");
           } catch (error) {
             Alert.alert("Error", "Failed to check in guest");
           }
@@ -187,14 +202,11 @@ export default function BookingsScreen() {
         text: "Check Out",
         onPress: async () => {
           try {
-            const token = await AsyncStorage.getItem("homestay_token");
-            const response = await fetch(`${API_BASE}/bookings/${item.id}/checkout`, {
-              method: "PATCH",
-              headers: { Authorization: `Bearer ${token}` },
-            });
+            const response = await apiFetch(`/bookings/${item.id}/checkout`, { method: "PATCH" });
             if (!response.ok) throw new Error("Failed to check out");
-            Alert.alert("Success", "Guest checked out successfully");
-            refetch();
+            await refreshBookings();
+            sendWhatsAppToGuest(item, "checked out");
+            Alert.alert("Success", "Guest checked out successfully. WhatsApp notification sent.");
           } catch (error) {
             Alert.alert("Error", "Failed to check out guest");
           }
@@ -247,7 +259,7 @@ export default function BookingsScreen() {
   };
 
   const shareInvoiceViaWhatsApp = (item: any) => {
-    const mobile = isHost ? item.guestMobile : item.property?.phone;
+    const mobile = normalizePhone(isHost ? item.guestMobile : item.property?.phone);
     if (!mobile) {
       Alert.alert("No Contact", "No phone number available to share invoice.");
       return;
@@ -272,7 +284,7 @@ Payment Status: ${item.paymentStatus?.toUpperCase()}
 Thank you for your booking!
     `.trim();
     
-    Linking.openURL(`https://wa.me/91${mobile}?text=${encodeURIComponent(invoiceText)}`);
+    Linking.openURL(`https://wa.me/${mobile}?text=${encodeURIComponent(invoiceText)}`);
   };
 
   const renderBooking = ({ item }: { item: any }) => {
@@ -389,7 +401,7 @@ Thank you for your booking!
                 <Text style={styles.actionBtnText}>Check-In</Text>
               </Pressable>
             )}
-            {isHost && item.status === "confirmed" && (
+            {isHost && item.status === "checked_in" && (
               <Pressable
                 style={[styles.actionBtn, { backgroundColor: "#10B981" }]}
                 onPress={() => handleCheckOut(item)}
@@ -472,8 +484,13 @@ Thank you for your booking!
               <Pressable
                 style={[styles.actionBtn, { backgroundColor: "#25D366" }]}
                 onPress={() => {
+                  const phone = normalizePhone(item.property.phone);
                   const msg = `Hi! I have a booking at ${item.property?.name} (Ref: #${item.referenceNumber}) from ${item.checkIn} to ${item.checkOut}. I have a question about my booking.`;
-                  Linking.openURL(`https://wa.me/91${item.property.phone}?text=${encodeURIComponent(msg)}`);
+                  if (!phone) {
+                    Alert.alert("No Contact", "No phone number available to open WhatsApp.");
+                    return;
+                  }
+                  Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
                 }}
               >
                 <Ionicons name="logo-whatsapp" size={15} color="#fff" />
@@ -806,6 +823,8 @@ Thank you for your booking!
         visible={travelGuideModalVisible}
         onClose={() => setTravelGuideModalVisible(false)}
         property={selectedBooking?.property}
+        guestMobile={isHost ? selectedBooking?.guestMobile : undefined}
+        guestName={isHost ? selectedBooking?.guestName : undefined}
       />
     </View>
   );

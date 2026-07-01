@@ -1,24 +1,23 @@
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  Clipboard,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+import { apiFetch, resolveAssetUrl } from "@/utils/api";
 
 const PAYMENT_METHODS = ["all", "cash", "upi", "bank_transfer", "card", "google_pay", "phonepe", "paytm"];
 const STATUSES = ["all", "pending", "completed", "failed", "refunded"];
@@ -34,29 +33,18 @@ export default function TransactionsScreen() {
   const { data: transactions, isLoading, refetch } = useQuery({
     queryKey: ["transactions", statusFilter, methodFilter],
     queryFn: async () => {
-      const token = await fetchToken();
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.append("status", statusFilter);
       if (methodFilter !== "all") params.append("paymentMethod", methodFilter);
       
-      const response = await fetch(`${API_BASE}/transactions?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await apiFetch(`/transactions?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch transactions");
       return response.json();
     },
     enabled: !!user,
   });
 
-  const fetchToken = async () => {
-    try {
-      const token = await AsyncStorage.getItem("homestay_token");
-      return token || "";
-    } catch (error) {
-      console.error("Failed to fetch token", error);
-      return "";
-    }
-  };
+  const buildProofUrl = (proofUrl: string) => resolveAssetUrl(proofUrl);
 
   const exportToCSV = async () => {
     if (!transactions || transactions.length === 0) {
@@ -78,7 +66,7 @@ export default function TransactionsScreen() {
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
     
     try {
-      Clipboard.setString(csvContent);
+      await Clipboard.setStringAsync(csvContent);
       Alert.alert("CSV Copied", "Transaction data copied to clipboard. Paste in Excel/Google Sheets.");
     } catch (error) {
       Alert.alert("Error", "Failed to copy to clipboard");
@@ -230,8 +218,19 @@ export default function TransactionsScreen() {
               )}
 
               {transaction.proofUrl && (
-                <Pressable style={[styles.proofBtn, { borderColor: colors.border }]}>
-                  <Feather name="image" size={16} color={colors.primary} />
+                <Pressable
+                  style={[styles.proofBtn, { borderColor: colors.border }]}
+                  onPress={() => {
+                    const proofUrl = buildProofUrl(transaction.proofUrl);
+                    if (!proofUrl) {
+                      Alert.alert("Error", "Invalid proof URL");
+                      return;
+                    }
+                    Linking.openURL(proofUrl).catch(() => {
+                      Alert.alert("Error", "Unable to open proof URL");
+                    });
+                  }}
+                >
                   <Text style={[styles.proofBtnText, { color: colors.primary }]}>View Proof</Text>
                 </Pressable>
               )}

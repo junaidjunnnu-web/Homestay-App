@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import { transactionsTable, bookingsTable, usersTable, propertiesTable, roomsTable } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, or, sql } from "drizzle-orm";
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth";
 
@@ -10,7 +10,7 @@ function serializeTransaction(t: typeof transactionsTable.$inferSelect) {
   return { ...t, createdAt: t.createdAt.toISOString(), updatedAt: t.updatedAt.toISOString() };
 }
 
-// GET transactions for current user
+// GET transactions for current user or host bookings
 router.get("/transactions", requireAuth, async (req, res) => {
   const user = (req as typeof req & { user: { id: string; role: string } }).user;
   try {
@@ -20,8 +20,61 @@ router.get("/transactions", requireAuth, async (req, res) => {
       bookingId?: string;
     };
 
-    let conditions = [eq(transactionsTable.userId, user.id)];
-    
+    let conditions: any[] = [];
+
+    if (user.role === "host") {
+      const hostProps = await db
+        .select({ id: propertiesTable.id })
+        .from(propertiesTable)
+        .where(eq(propertiesTable.hostId, user.id));
+      const propIds = hostProps.map((p) => p.id);
+      let hostBookingIds: string[] = [];
+
+      if (propIds.length > 0) {
+        const rooms = await db
+          .select({ id: roomsTable.id })
+          .from(roomsTable)
+          .where(sql`${roomsTable.propertyId} = ANY(ARRAY[${sql.raw(propIds.map((id) => `'${id}'`).join(","))}]::uuid[])`);
+        const roomIds = rooms.map((r) => r.id);
+
+        if (roomIds.length > 0) {
+          const bookings = await db
+            .select({ id: bookingsTable.id })
+            .from(bookingsTable)
+            .where(sql`${bookingsTable.roomId} = ANY(ARRAY[${sql.raw(roomIds.map((id) => `'${id}'`).join(","))}]::uuid[])`);
+          hostBookingIds = bookings.map((b) => b.id);
+        }
+      }
+
+      if (hostBookingIds.length > 0) {
+        conditions.push(
+          or(
+            eq(transactionsTable.userId, user.id),
+            sql`${transactionsTable.bookingId} = ANY(ARRAY[${sql.raw(hostBookingIds.map((id) => `'${id}'`).join(","))}]::uuid[])`
+          )
+        );
+      } else {
+        conditions.push(eq(transactionsTable.userId, user.id));
+      }
+    } else {
+      const guestBookings = await db
+        .select({ id: bookingsTable.id })
+        .from(bookingsTable)
+        .where(eq(bookingsTable.guestId, user.id));
+      const guestBookingIds = guestBookings.map((b) => b.id);
+
+      if (guestBookingIds.length > 0) {
+        conditions.push(
+          or(
+            eq(transactionsTable.userId, user.id),
+            sql`${transactionsTable.bookingId} = ANY(ARRAY[${sql.raw(guestBookingIds.map((id) => `'${id}'`).join(","))}]::uuid[])`
+          )
+        );
+      } else {
+        conditions.push(eq(transactionsTable.userId, user.id));
+      }
+    }
+
     if (status) {
       conditions.push(eq(transactionsTable.status, status as "pending" | "completed" | "failed" | "refunded"));
     }
@@ -113,11 +166,13 @@ router.post("/transactions", requireAuth, async (req, res) => {
       return;
     }
 
-    // Check if user is host
     const [room] = await db.select().from(roomsTable).where(eq(roomsTable.id, booking.roomId)).limit(1);
     const [property] = room ? await db.select().from(propertiesTable).where(eq(propertiesTable.id, room.propertyId)).limit(1) : [null];
-    if (!property || property.hostId !== user.id) {
-      res.status(403).json({ error: "forbidden", message: "Only hosts can create transactions" });
+    const isHost = property?.hostId === user.id;
+    const isGuest = booking.guestId === user.id;
+
+    if (!isHost && !isGuest) {
+      res.status(403).json({ error: "forbidden", message: "Not your booking" });
       return;
     }
 
@@ -271,7 +326,8 @@ router.get("/transactions/dashboard", requireAuth, async (req, res) => {
     const pendingBookings = bookings.filter(b => b.paymentStatus !== "paid");
 
     const recentTransactions = await Promise.all(
-      transactions
+      [...transactions]
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .slice(0, 10)
         .map(async (transaction) => {
           const [booking] = bookings.filter(b => b.id === transaction.bookingId);

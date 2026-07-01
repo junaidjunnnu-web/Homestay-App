@@ -12,18 +12,17 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import UPIScannerModal from "@/components/UPIScannerModal";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+import { apiFetch, getApiBaseUrl, resolveAssetUrl } from "@/utils/api";
+import { openWhatsApp } from "@/utils/whatsapp";
 
 interface PaymentModalProps {
   visible: boolean;
   onClose: () => void;
-  booking: any;
+  booking?: any | null;
   onSuccess: () => void;
 }
 
@@ -52,13 +51,9 @@ export default function PaymentModal({ visible, onClose, booking, onSuccess }: P
 
   const mutation = useMutation({
     mutationFn: async (data: any) => {
-      const token = await fetchToken();
-      const response = await fetch(`${API_BASE}/transactions`, {
+      const response = await apiFetch("/transactions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!response.ok) {
@@ -67,8 +62,14 @@ export default function PaymentModal({ visible, onClose, booking, onSuccess }: P
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       Alert.alert("Success", "Payment recorded successfully");
+      if (booking?.guestMobile) {
+        openWhatsApp(
+          booking.guestMobile,
+          `Hi ${booking.guestName}! ✅\n\nPayment of ₹${Number(variables.amount).toLocaleString("en-IN")} received for booking #${booking.referenceNumber} at ${booking.property?.name || "our homestay"}.\n\nThank you!`
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ["hostBookings"] });
       queryClient.invalidateQueries({ queryKey: ["guestBookings"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
@@ -81,22 +82,11 @@ export default function PaymentModal({ visible, onClose, booking, onSuccess }: P
     },
   });
 
-  const fetchToken = async () => {
-    try {
-      const token = await AsyncStorage.getItem("homestay_token");
-      return token || "";
-    } catch (error) {
-      console.error("Failed to fetch token", error);
-      return "";
-    }
-  };
-
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: false,
         quality: 0.8,
       });
 
@@ -119,18 +109,14 @@ export default function PaymentModal({ visible, onClose, booking, onSuccess }: P
         name: `payment_proof_${Date.now()}.jpg`,
       } as any);
 
-      const token = await fetchToken();
-      const response = await fetch(`${API_BASE}/upload`, {
+      const response = await apiFetch("/upload", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: formData,
       });
 
       if (!response.ok) throw new Error("Upload failed");
       const data = await response.json();
-      return data.url;
+      return resolveAssetUrl(data.url) || `${getApiBaseUrl().replace("/api", "")}${data.url}`;
     } catch (error) {
       Alert.alert("Error", "Failed to upload proof");
       return null;

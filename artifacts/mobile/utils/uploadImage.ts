@@ -1,14 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { getApiBaseUrl, getServerBaseUrl } from "./api";
 
 const TOKEN_KEY = "homestay_token";
 
 export async function uploadImage(imageUri: string): Promise<string> {
   const token = await AsyncStorage.getItem(TOKEN_KEY);
-  // Use the same base URL as the app configuration
-  const baseUrl = process.env.EXPO_PUBLIC_API_URL 
-    ? process.env.EXPO_PUBLIC_API_URL.replace('/api', '')
-    : "https://homestay-booking--junaid001.replit.app";
+  const baseUrl = getServerBaseUrl();
+  const apiUrl = getApiBaseUrl();
 
   const rawFilename = imageUri.split("/").pop()?.split("?")[0] || "photo.jpg";
   const ext = rawFilename.includes(".") ? (rawFilename.split(".").pop()?.toLowerCase() ?? "jpg") : "jpg";
@@ -18,13 +17,11 @@ export async function uploadImage(imageUri: string): Promise<string> {
   const formData = new FormData();
 
   if (Platform.OS === "web" || imageUri.startsWith("blob:") || imageUri.startsWith("data:")) {
-    // Web: fetch the blob/data URI and create a proper File object
     const blobResponse = await fetch(imageUri);
     const blob = await blobResponse.blob();
     const file = new File([blob], safeFilename, { type: blob.type || mimeType });
     formData.append("file", file);
   } else {
-    // Native (iOS/Android): React Native FormData style
     formData.append("file", {
       uri: imageUri,
       name: safeFilename,
@@ -32,7 +29,7 @@ export async function uploadImage(imageUri: string): Promise<string> {
     } as any);
   }
 
-  const response = await fetch(`${baseUrl}/api/upload`, {
+  const response = await fetch(`${apiUrl}/upload`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -46,17 +43,13 @@ export async function uploadImage(imageUri: string): Promise<string> {
   }
 
   const result = await response.json();
-  
-  // Handle both url and path formats from API
+
   if (result.url) {
-    // If API returns full URL, use it directly
-    if (result.url.startsWith('http')) {
+    if (result.url.startsWith("http")) {
       return result.url;
     }
-    // If relative URL, prepend baseUrl
     return `${baseUrl}${result.url}`;
   }
-  
-  // Fallback to path format
+
   return `${baseUrl}${result.path}`;
 }

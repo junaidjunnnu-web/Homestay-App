@@ -30,6 +30,7 @@ function getGreeting() {
 
 const STATUS_COLORS: Record<string, string> = {
   confirmed: "#10B981",
+  checked_in: "#3B82F6",
   pending: "#F59E0B",
   cancelled: "#EF4444",
   completed: "#6366F1",
@@ -50,11 +51,11 @@ export default function DashboardScreen() {
   // Today's check-ins and check-outs
   const todayStr = new Date().toISOString().split("T")[0]!;
   const todayCheckins = useMemo(
-    () => bookingsArr.filter(b => b.checkIn === todayStr && b.status === "confirmed").length,
+    () => bookingsArr.filter(b => b.checkIn === todayStr && (b.status === "confirmed" || b.status === "checked_in")).length,
     [bookingsArr, todayStr]
   );
   const todayCheckouts = useMemo(
-    () => bookingsArr.filter(b => b.checkOut === todayStr && b.status === "confirmed").length,
+    () => bookingsArr.filter(b => b.checkOut === todayStr && (b.status === "checked_in" || b.status === "completed")).length,
     [bookingsArr, todayStr]
   );
 
@@ -93,7 +94,7 @@ export default function DashboardScreen() {
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split("T")[0]!;
       const occupiedRooms = bookingsArr.filter(
-        b => b.status === "confirmed" && dateStr >= b.checkIn && dateStr <= b.checkOut
+        b => (b.status === "confirmed" || b.status === "checked_in") && dateStr >= b.checkIn && dateStr < b.checkOut
       ).length;
       const totalRooms = stats?.totalRooms || 1;
       const occupancyRate = Math.round((occupiedRooms / totalRooms) * 100);

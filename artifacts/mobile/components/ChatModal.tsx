@@ -2,6 +2,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -13,17 +14,16 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect, useRef } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+import { apiFetch } from "@/utils/api";
+import { normalizePhone } from "@/utils/whatsapp";
 
 interface ChatModalProps {
   visible: boolean;
   onClose: () => void;
-  booking: any;
-  currentUser: any;
+  booking?: any | null;
+  currentUser?: any | null;
 }
 
 export default function ChatModal({ visible, onClose, booking, currentUser }: ChatModalProps) {
@@ -32,13 +32,33 @@ export default function ChatModal({ visible, onClose, booking, currentUser }: Ch
   const scrollViewRef = useRef<ScrollView>(null);
   const [message, setMessage] = useState("");
 
+  const normalizePhoneLocal = (raw: string | number | undefined | null) => normalizePhone(raw);
+
+  const openWhatsApp = () => {
+    if (!booking || !currentUser) {
+      Alert.alert("Unavailable", "Booking information is not loaded yet.");
+      return;
+    }
+    const phone = booking.guestId === currentUser.id ? booking.property?.phone : booking.guestMobile;
+    const name = booking.guestId === currentUser.id ? booking.property?.name || "Host" : booking.guestName || "Guest";
+    const cleanPhone = normalizePhoneLocal(phone);
+    if (!cleanPhone) {
+      Alert.alert("WhatsApp Unavailable", "No phone number available to open WhatsApp.");
+      return;
+    }
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi ${name}, I wanted to continue our booking conversation from Homestay App.`)}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Error", "Could not open WhatsApp.");
+    });
+  };
+
   const { data: messages, isLoading } = useQuery({
     queryKey: ["messages", booking?.id],
     queryFn: async () => {
-      const token = await AsyncStorage.getItem("homestay_token");
-      const response = await fetch(`${API_BASE}/messages/booking/${booking.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      if (!booking?.id) {
+        return [];
+      }
+      const response = await apiFetch(`/messages/booking/${booking.id}`);
       if (!response.ok) throw new Error("Failed to fetch messages");
       return response.json();
     },
@@ -48,15 +68,14 @@ export default function ChatModal({ visible, onClose, booking, currentUser }: Ch
 
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {
-      const token = await AsyncStorage.getItem("homestay_token");
+      if (!booking || !currentUser) {
+        throw new Error("Booking or user data missing");
+      }
       const receiverId = booking.guestId === currentUser.id ? booking.property?.hostId : booking.guestId;
 
-      const response = await fetch(`${API_BASE}/messages`, {
+      const response = await apiFetch("/messages", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bookingId: booking.id,
           receiverId,
@@ -80,11 +99,7 @@ export default function ChatModal({ visible, onClose, booking, currentUser }: Ch
 
   const markAsReadMutation = useMutation({
     mutationFn: async (messageId: string) => {
-      const token = await AsyncStorage.getItem("homestay_token");
-      const response = await fetch(`${API_BASE}/messages/${messageId}/read`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await apiFetch(`/messages/${messageId}/read`, { method: "PATCH" });
       if (!response.ok) throw new Error("Failed to mark as read");
       return response.json();
     },
@@ -102,9 +117,9 @@ export default function ChatModal({ visible, onClose, booking, currentUser }: Ch
     sendMessageMutation.mutate(message.trim());
   };
 
-  const isOwnMessage = (msg: any) => msg.senderId === currentUser.id;
+  const isOwnMessage = (msg: any) => currentUser && msg.senderId === currentUser.id;
 
-  if (!booking) return null;
+  if (!booking || !currentUser) return null;
 
   return (
     <Modal visible={visible} animationType="slide">
@@ -124,10 +139,11 @@ export default function ChatModal({ visible, onClose, booking, currentUser }: Ch
             </Text>
             <Text style={styles.headerSubtitle}>Booking #{booking.referenceNumber}</Text>
           </View>
-          <View style={{ width: 40 }} />
+          <Pressable onPress={openWhatsApp} style={styles.whatsappButton}>
+            <Ionicons name="logo-whatsapp" size={20} color="#fff" />
+          </Pressable>
         </View>
 
-        {/* Messages */}
         <ScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
@@ -295,5 +311,11 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
-  },
-});
+  },  whatsappButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#25D366",
+  },});

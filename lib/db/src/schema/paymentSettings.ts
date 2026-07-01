@@ -11,6 +11,7 @@ export const paymentSettingsTable = pgTable("payment_settings", {
     enum: ["cash", "upi", "bank_transfer", "card", "google_pay", "phonepe", "paytm"] 
   }).notNull().default("cash"),
   upiId: text("upi_id"),
+  upiQrUrl: text("upi_qr_url"),
   bankDetails: jsonb("bank_details").$type<{
     accountNumber: string;
     ifscCode: string;

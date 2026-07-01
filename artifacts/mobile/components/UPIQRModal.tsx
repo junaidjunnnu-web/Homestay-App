@@ -10,6 +10,7 @@ import {
   Linking,
   Share,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import { useColors } from "@/hooks/useColors";
@@ -31,9 +32,11 @@ export default function UPIQRModal({ visible, onClose, upiId, amount, bookingRef
   const upiUrl = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(property || 'Homestay')}&am=${amount}&tn=Booking%20${bookingRef}&cu=INR`;
   const upiLink = `https://upi.link/?${upiUrl.replace('upi://pay?', '')}`;
 
-  const copyUPIId = () => {
+  const copyUPIId = async () => {
+    await Clipboard.setStringAsync(upiId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    Alert.alert("Copied", "UPI ID copied to clipboard.");
   };
 
   const shareUPI = async () => {

@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -11,11 +12,10 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useQuery } from "@tanstack/react-query";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+import { apiFetch } from "@/utils/api";
+import { openWhatsApp } from "@/utils/whatsapp";
 
 const CATEGORIES = [
   { key: "all", label: "All", icon: "grid" },
@@ -32,25 +32,24 @@ interface TravelGuideModalProps {
   visible: boolean;
   onClose: () => void;
   property: any;
+  guestMobile?: string;
+  guestName?: string;
 }
 
-export default function TravelGuideModal({ visible, onClose, property }: TravelGuideModalProps) {
+export default function TravelGuideModal({ visible, onClose, property, guestMobile, guestName }: TravelGuideModalProps) {
   const colors = useColors();
   const [selectedCategory, setSelectedCategory] = useState("all");
 
   const { data: attractions, isLoading } = useQuery({
-    queryKey: ["attractions", property?.id, selectedCategory],
+    queryKey: ["nearbyPlaces", property?.id, selectedCategory],
     queryFn: async () => {
-      const token = await AsyncStorage.getItem("homestay_token");
-      const url = selectedCategory === "all"
-        ? `${API_BASE}/properties/${property.id}/attractions`
-        : `${API_BASE}/properties/${property.id}/attractions?category=${selectedCategory}`;
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const path = selectedCategory === "all"
+        ? `/properties/${property.id}/nearby-places`
+        : `/properties/${property.id}/nearby-places?category=${selectedCategory}`;
+      const response = await apiFetch(path);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to fetch attractions");
+        throw new Error(errorData.message || "Failed to fetch nearby places");
       }
       return response.json();
     },
@@ -75,6 +74,34 @@ export default function TravelGuideModal({ visible, onClose, property }: TravelG
 
   const openWebsite = (url: string) => {
     Linking.openURL(url);
+  };
+
+  const shareAttractionViaWhatsApp = (attraction: any) => {
+    if (!guestMobile) {
+      shareAttraction(attraction);
+      return;
+    }
+    const mapsLink = attraction.latitude && attraction.longitude
+      ? `https://www.google.com/maps/search/?api=1&query=${attraction.latitude},${attraction.longitude}`
+      : attraction.address
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.address)}`
+      : "";
+    const message = `Hi ${guestName || "there"}! 🗺️\n\nI recommend visiting *${attraction.name}* near ${property?.name}.\n\n${attraction.description || "A great local spot to explore."}\n\n${attraction.address ? `Address: ${attraction.address}\n` : ""}${mapsLink ? `Open in Maps: ${mapsLink}` : ""}`;
+    openWhatsApp(guestMobile, message);
+  };
+
+  const shareAttraction = async (attraction: any) => {
+    const message = `Check out ${attraction.name} near ${property?.name}!
+
+${attraction.description || "Great place to visit."}
+
+Address: ${attraction.address || "See details in the app."}
+${attraction.latitude && attraction.longitude ? `Maps: https://www.google.com/maps/search/?api=1&query=${attraction.latitude},${attraction.longitude}` : ""}`;
+    try {
+      await Share.share({ title: attraction.name, message });
+    } catch (error) {
+      Alert.alert("Error", "Could not share attraction details.");
+    }
   };
 
   const getCategoryIcon = (category: string) => {
@@ -245,6 +272,13 @@ export default function TravelGuideModal({ visible, onClose, property }: TravelG
                       <Text style={styles.actionButtonText}>Website</Text>
                     </Pressable>
                   )}
+                  <Pressable
+                    style={[styles.actionButton, { backgroundColor: "#25D366" }]}
+                    onPress={() => guestMobile ? shareAttractionViaWhatsApp(attraction) : shareAttraction(attraction)}
+                  >
+                    <Ionicons name={guestMobile ? "logo-whatsapp" : "share-social"} size={18} color="#fff" />
+                    <Text style={styles.actionButtonText}>{guestMobile ? "WhatsApp" : "Share"}</Text>
+                  </Pressable>
                 </View>
               </View>
             ))

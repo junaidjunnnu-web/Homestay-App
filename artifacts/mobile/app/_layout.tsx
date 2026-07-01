@@ -15,16 +15,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { getServerBaseUrl } from "@/utils/api";
 import { setBaseUrl } from "@workspace/api-client-react";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Set API base URL - use environment variable or fallback to production URL
-const API_BASE = process.env.EXPO_PUBLIC_API_URL 
-  ? process.env.EXPO_PUBLIC_API_URL.replace('/api', '')
-  : "https://homestay-booking--junaid001.replit.app";
-setBaseUrl(API_BASE);
+setBaseUrl(getServerBaseUrl());
 
 const queryClient = new QueryClient();
 

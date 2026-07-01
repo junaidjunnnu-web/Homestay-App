@@ -15,12 +15,13 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState, useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+import * as ImagePicker from "expo-image-picker";
+import { Image } from "expo-image";
+import { uploadImage } from "@/utils/uploadImage";
+import { apiFetch, resolveAssetUrl } from "@/utils/api";
 
 export default function PaymentSettingsScreen() {
   const colors = useColors();
@@ -33,6 +34,7 @@ export default function PaymentSettingsScreen() {
     acceptedPaymentMethods: ["cash"],
     defaultPaymentMethod: "cash",
     upiId: "",
+    upiQrUrl: "",
     bankDetails: {
       accountNumber: "",
       ifscCode: "",
@@ -49,13 +51,12 @@ export default function PaymentSettingsScreen() {
     delayedPaymentDays: "3",
   });
 
+  const [uploadingQr, setUploadingQr] = useState(false);
+
   const { data: settings, isLoading, refetch } = useQuery({
     queryKey: ["paymentSettings"],
     queryFn: async () => {
-      const token = await fetchToken();
-      const response = await fetch(`${API_BASE}/payment-settings`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await apiFetch("/payment-settings");
       if (!response.ok) throw new Error("Failed to fetch payment settings");
       return response.json();
     },
@@ -68,6 +69,7 @@ export default function PaymentSettingsScreen() {
         acceptedPaymentMethods: settings.acceptedPaymentMethods || ["cash"],
         defaultPaymentMethod: settings.defaultPaymentMethod || "cash",
         upiId: settings.upiId || "",
+        upiQrUrl: settings.upiQrUrl || "",
         bankDetails: settings.bankDetails || {
           accountNumber: "",
           ifscCode: "",
@@ -88,34 +90,42 @@ export default function PaymentSettingsScreen() {
 
   const mutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const token = await fetchToken();
-      const response = await fetch(`${API_BASE}/payment-settings`, {
+      const response = await apiFetch("/payment-settings", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error("Failed to update payment settings");
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to update payment settings");
+      }
       return response.json();
     },
     onSuccess: () => {
       Alert.alert("Success", "Payment settings updated successfully");
       queryClient.invalidateQueries({ queryKey: ["paymentSettings"] });
     },
-    onError: () => {
-      Alert.alert("Error", "Failed to update payment settings");
+    onError: (error: Error) => {
+      Alert.alert("Error", error.message || "Failed to update payment settings");
     },
   });
 
-  const fetchToken = async () => {
+  const pickQrImage = async () => {
     try {
-      const token = await AsyncStorage.getItem("homestay_token");
-      return token || "";
-    } catch (error) {
-      console.error("Failed to fetch token", error);
-      return "";
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setUploadingQr(true);
+        const url = await uploadImage(result.assets[0].uri);
+        setFormData({ ...formData, upiQrUrl: url });
+      }
+    } catch {
+      Alert.alert("Error", "Failed to upload QR image");
+    } finally {
+      setUploadingQr(false);
     }
   };
 
@@ -254,6 +264,30 @@ export default function PaymentSettingsScreen() {
                     placeholderTextColor={colors.mutedForeground}
                     autoCapitalize="none"
                   />
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Payment QR Code Image</Text>
+                  <Pressable
+                    style={[styles.qrUploadBtn, { borderColor: colors.border }]}
+                    onPress={pickQrImage}
+                    disabled={uploadingQr}
+                  >
+                    {uploadingQr ? (
+                      <ActivityIndicator color="#E8824A" />
+                    ) : formData.upiQrUrl ? (
+                      <Image source={{ uri: resolveAssetUrl(formData.upiQrUrl) || formData.upiQrUrl }} style={styles.qrPreview} contentFit="contain" />
+                    ) : (
+                      <>
+                        <Feather name="upload" size={24} color={colors.mutedForeground} />
+                        <Text style={[styles.qrUploadText, { color: colors.mutedForeground }]}>Tap to upload UPI QR image</Text>
+                      </>
+                    )}
+                  </Pressable>
+                  {formData.upiQrUrl ? (
+                    <Pressable onPress={() => setFormData({ ...formData, upiQrUrl: "" })}>
+                      <Text style={[styles.removeQrText, { color: colors.destructive }]}>Remove QR image</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               </View>
             )}
@@ -607,4 +641,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  qrUploadBtn: {
+    height: 160,
+    borderWidth: 2,
+    borderRadius: 12,
+    borderStyle: "dashed",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  qrPreview: { width: "100%", height: "100%" },
+  qrUploadText: { fontSize: 12, marginTop: 8 },
+  removeQrText: { fontSize: 13, fontWeight: "600", marginTop: 8, textAlign: "center" },
 });

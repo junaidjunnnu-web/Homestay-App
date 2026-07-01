@@ -1,8 +1,6 @@
 import {
   ActivityIndicator,
   Alert,
-  Clipboard,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -18,14 +16,15 @@ import React, { useMemo, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGetHostDashboard, useGetHostBookings, useGetHostProperties } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/utils/api";
 
 const { width } = Dimensions.get("window");
 const CHART_W = width - 48;
 const CHART_H = 140;
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const EXPENSE_CATEGORIES = ["Utilities", "Maintenance", "Staff Salary", "Supplies", "Marketing", "Taxes", "Insurance", "Other"] as const;
 
 function getMonthlyRevenue(bookings: any[]) {
   const now = new Date();
@@ -35,12 +34,12 @@ function getMonthlyRevenue(bookings: any[]) {
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const label = MONTHS[d.getMonth()]!;
     const filtered = bookings.filter(b => {
-      const bDate = b.checkIn?.slice(0, 7);
+      const bDate = b.createdAt?.slice(0, 7) || b.checkIn?.slice(0, 7);
       return bDate === key && b.status !== "cancelled";
     });
     result.push({
       month: label,
-      revenue: filtered.reduce((s, b) => s + (b.totalAmount || 0), 0),
+      revenue: filtered.reduce((s, b) => s + (b.paidAmount || 0), 0),
       count: filtered.length,
     });
   }
@@ -68,41 +67,43 @@ function getRoomOccupancy(bookings: any[]) {
 export default function FinanceScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [tab, setTab] = useState<"overview" | "expenses" | "payments">("overview");
-  const [expenseModalVisible, setExpenseModalVisible] = useState(false);
   const [plModalVisible, setPlModalVisible] = useState(false);
-  const [newExpense, setNewExpense] = useState({ category: "Utilities", amount: "", description: "" });
 
   const { data: stats, isLoading } = useGetHostDashboard();
   const { data: allBookings = [] } = useGetHostBookings({});
   const { data: properties = [] } = useGetHostProperties();
 
-  const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
-
   const { data: paymentDashboard, isLoading: loadingPayments } = useQuery({
     queryKey: ["paymentDashboard"],
     queryFn: async () => {
-      const token = await fetchToken();
-      const response = await fetch(`${API_BASE}/transactions/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await apiFetch("/transactions/dashboard");
       if (!response.ok) throw new Error("Failed to fetch payment dashboard");
       return response.json();
     },
-    enabled: tab === "payments",
+    enabled: !!user && user.role === "host",
   });
 
-  const fetchToken = async () => {
-    // Implement token fetching based on your auth context
-    return "";
-  };
+  const { data: allTransactions = [] } = useQuery({
+    queryKey: ["transactions", "finance"],
+    queryFn: async () => {
+      const response = await apiFetch("/transactions");
+      if (!response.ok) throw new Error("Failed to fetch transactions");
+      return response.json();
+    },
+    enabled: !!user && user.role === "host",
+  });
 
-  // Mock expenses data (would come from API in production)
-  const expenses = useMemo(() => [
-    { id: "1", category: "Utilities", amount: 5000, description: "Electricity bill", date: "2025-01-15" },
-    { id: "2", category: "Maintenance", amount: 2000, description: "Plumbing repair", date: "2025-01-10" },
-    { id: "3", category: "Staff Salary", amount: 25000, description: "Monthly salaries", date: "2025-01-01" },
-  ], []);
+  const { data: paymentSettings } = useQuery({
+    queryKey: ["paymentSettings"],
+    queryFn: async () => {
+      const response = await apiFetch("/payment-settings");
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: !!user && user.role === "host",
+  });
 
   const monthlyData = useMemo(() => getMonthlyRevenue(allBookings as any[]), [allBookings]);
   const roomOccupancy = useMemo(() => getRoomOccupancy(allBookings as any[]), [allBookings]);
@@ -110,30 +111,33 @@ export default function FinanceScreen() {
   const maxRev = Math.max(...monthlyData.map(m => m.revenue), 1);
   const maxNights = Math.max(...roomOccupancy.map(r => r.nights), 1);
 
-  const totalRevenue = (allBookings as any[]).filter(b => b.status !== "cancelled").reduce((s: number, b: any) => s + (b.totalAmount || 0), 0);
-  const confirmedCount = (allBookings as any[]).filter(b => b.status === "confirmed").length;
+  const totalRevenue = (allBookings as any[]).filter(b => b.status !== "cancelled").reduce((s: number, b: any) => s + (b.paidAmount || 0), 0);
+  const totalBookingsValue = (allBookings as any[]).filter(b => b.status !== "cancelled").reduce((s: number, b: any) => s + (b.totalAmount || 0), 0);
+  const pendingCollections = totalBookingsValue - totalRevenue;
+  const confirmedCount = (allBookings as any[]).filter(b => b.status === "confirmed" || b.status === "checked_in").length;
   const pendingCount = (allBookings as any[]).filter(b => b.status === "pending").length;
   const cancelledCount = (allBookings as any[]).filter(b => b.status === "cancelled").length;
-  const avgBookingValue = confirmedCount > 0 ? Math.round(totalRevenue / confirmedCount) : 0;
+  const avgBookingValue = confirmedCount > 0 ? Math.round(totalBookingsValue / confirmedCount) : 0;
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalExpenses = 0;
   const netProfit = totalRevenue - totalExpenses;
-  const gstAmount = totalRevenue * 0.18; // 18% GST
+  const gstAmount = totalRevenue * 0.18;
   const revenueAfterGST = totalRevenue - gstAmount;
 
-  const firstProp = (properties as any[])[0];
-  const upiId = firstProp?.upiId || "";
-  const bankDetails = firstProp?.bankDetails || "";
+  const upiId = paymentSettings?.upiId || (properties as any[])[0]?.upiId || "";
+  const bankDetails = paymentSettings?.bankDetails
+    ? `${paymentSettings.bankDetails.bankName || ""}\nA/C: ${paymentSettings.bankDetails.accountNumber || ""}`
+    : (properties as any[])[0]?.bankDetails || "";
 
-  const addExpense = () => {
-    if (!newExpense.amount || isNaN(Number(newExpense.amount))) {
-      Alert.alert("Invalid Amount", "Please enter a valid amount");
-      return;
-    }
-    Alert.alert("Expense Added", "Expense has been recorded successfully.");
-    setExpenseModalVisible(false);
-    setNewExpense({ category: "Utilities", amount: "", description: "" });
-  };
+  const propertyTimeline = useMemo(() => {
+    return (properties as any[])
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        date: p.createdAt?.slice(0, 10) || "—",
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [properties]);
 
   const shareReport = async () => {
     const lines = [
@@ -160,6 +164,14 @@ export default function FinanceScreen() {
       await Share.share({ message: lines.join("\n"), title: "Homestay Revenue Report" });
     } catch {}
   };
+
+  if (!user || user.role !== "host") {
+    return (
+      <View style={[styles.centered, { backgroundColor: colors.background }]}> 
+        <Text style={{ color: colors.foreground }}>Access denied. Host account required.</Text>
+      </View>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -325,24 +337,26 @@ export default function FinanceScreen() {
             {/* Recent Transactions */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
               <Text style={styles.sectionTitle}>RECENT TRANSACTIONS</Text>
-              {(allBookings as any[]).filter(b => b.status !== "cancelled").slice(0, 5).map((b: any) => (
-                <View key={b.id} style={[styles.txRow, { borderColor: colors.border }]}>
-                  <View style={[styles.txIcon, { backgroundColor: b.status === "confirmed" ? "#10B98115" : colors.warning + "15" }]}>
-                    <Feather name="arrow-down-left" size={14} color={b.status === "confirmed" ? "#10B981" : colors.warning} />
+              {(allTransactions as any[]).slice(0, 5).map((t: any) => (
+                <View key={t.id} style={[styles.txRow, { borderColor: colors.border }]}>
+                  <View style={[styles.txIcon, { backgroundColor: "#10B98115" }]}>
+                    <Feather name="arrow-down-left" size={14} color="#10B981" />
                   </View>
                   <View style={styles.txInfo}>
-                    <Text style={styles.txName} numberOfLines={1}>{b.guestName}</Text>
-                    <Text style={[styles.txDate, { color: colors.mutedForeground }]}>{b.checkIn} · #{b.referenceNumber}</Text>
+                    <Text style={styles.txName} numberOfLines={1}>{t.guest?.name || "Guest"}</Text>
+                    <Text style={[styles.txDate, { color: colors.mutedForeground }]}>
+                      {new Date(t.createdAt).toLocaleDateString("en-IN")} · #{t.booking?.referenceNumber || "—"}
+                    </Text>
                   </View>
                   <View style={styles.txRight}>
-                    <Text style={[styles.txAmount, { color: b.status === "confirmed" ? "#10B981" : colors.warning }]}>
-                      +₹{b.totalAmount?.toLocaleString("en-IN")}
+                    <Text style={[styles.txAmount, { color: "#10B981" }]}>
+                      +₹{t.amount?.toLocaleString("en-IN")}
                     </Text>
-                    <Text style={[styles.txStatus, { color: colors.mutedForeground }]}>{b.status}</Text>
+                    <Text style={[styles.txStatus, { color: colors.mutedForeground }]}>{t.paymentMethod}</Text>
                   </View>
                 </View>
               ))}
-              {(allBookings as any[]).filter(b => b.status !== "cancelled").length === 0 && (
+              {(allTransactions as any[]).length === 0 && (
                 <Text style={[styles.emptyTx, { color: colors.mutedForeground }]}>No transactions yet</Text>
               )}
             </View>
@@ -351,74 +365,35 @@ export default function FinanceScreen() {
 
         {tab === "expenses" && (
           <>
-            {/* Expense Summary */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
-              <Text style={styles.sectionTitle}>EXPENSE SUMMARY</Text>
-              <View style={styles.expenseSummaryRow}>
-                <View style={styles.expenseSummaryItem}>
-                  <Text style={[styles.expenseSummaryLabel, { color: colors.mutedForeground }]}>Total Expenses</Text>
-                  <Text style={[styles.expenseSummaryValue, { color: "#EF4444" }]}>₹{totalExpenses.toLocaleString("en-IN")}</Text>
-                </View>
-                <View style={styles.expenseSummaryItem}>
-                  <Text style={[styles.expenseSummaryLabel, { color: colors.mutedForeground }]}>This Month</Text>
-                  <Text style={[styles.expenseSummaryValue, { color: colors.primary }]}>₹{totalExpenses.toLocaleString("en-IN")}</Text>
-                </View>
-              </View>
-              <Pressable
-                style={[styles.addExpenseBtn, { backgroundColor: colors.primary }]}
-                onPress={() => setExpenseModalVisible(true)}
-              >
-                <Feather name="plus" size={16} color="#fff" />
-                <Text style={styles.addExpenseBtnText}>Add Expense</Text>
-              </Pressable>
-            </View>
-
-            {/* Expense List */}
-            <View style={[styles.section, { backgroundColor: colors.surface }]}>
-              <Text style={styles.sectionTitle}>RECENT EXPENSES</Text>
-              {expenses.map((expense) => (
-                <View key={expense.id} style={[styles.expenseRow, { borderColor: colors.border }]}>
-                  <View style={[styles.expenseIcon, { backgroundColor: "#EF444415" }]}>
-                    <Feather name="arrow-up-right" size={14} color="#EF4444" />
+              <Text style={styles.sectionTitle}>PROPERTY TIMELINE</Text>
+              <Text style={[styles.emptyExpenses, { color: colors.mutedForeground, marginBottom: 12 }]}>
+                Finance data is based on your actual listings and bookings.
+              </Text>
+              {propertyTimeline.map((p) => (
+                <View key={p.id} style={[styles.expenseRow, { borderColor: colors.border }]}>
+                  <View style={[styles.expenseIcon, { backgroundColor: colors.primary + "15" }]}>
+                    <Feather name="home" size={14} color={colors.primary} />
                   </View>
                   <View style={styles.expenseInfo}>
-                    <Text style={styles.expenseCategory}>{expense.category}</Text>
-                    <Text style={[styles.expenseDesc, { color: colors.mutedForeground }]}>{expense.description}</Text>
-                    <Text style={[styles.expenseDate, { color: colors.mutedForeground }]}>{expense.date}</Text>
-                  </View>
-                  <View style={styles.expenseRight}>
-                    <Text style={[styles.expenseAmount, { color: "#EF4444" }]}>
-                      -₹{expense.amount.toLocaleString("en-IN")}
-                    </Text>
+                    <Text style={styles.expenseCategory}>{p.name}</Text>
+                    <Text style={[styles.expenseDesc, { color: colors.mutedForeground }]}>Listed on {p.date}</Text>
                   </View>
                 </View>
               ))}
-              {expenses.length === 0 && (
-                <Text style={[styles.emptyExpenses, { color: colors.mutedForeground }]}>No expenses recorded</Text>
+              {propertyTimeline.length === 0 && (
+                <Text style={[styles.emptyExpenses, { color: colors.mutedForeground }]}>No properties listed yet</Text>
               )}
             </View>
 
-            {/* Expense by Category */}
             <View style={[styles.section, { backgroundColor: colors.surface }]}>
-              <Text style={styles.sectionTitle}>EXPENSES BY CATEGORY</Text>
-              {EXPENSE_CATEGORIES.map((cat) => {
-                const catTotal = expenses.filter(e => e.category === cat).reduce((sum, e) => sum + e.amount, 0);
-                const maxCatTotal = Math.max(...EXPENSE_CATEGORIES.map(c => expenses.filter(e => e.category === c).reduce((sum, e) => sum + e.amount, 0)), 1);
-                return (
-                  <View key={cat} style={styles.catRow}>
-                    <Text style={styles.catName}>{cat}</Text>
-                    <View style={[styles.catTrack, { backgroundColor: colors.border }]}>
-                      <View
-                        style={[
-                          styles.catBar,
-                          { width: `${Math.round((catTotal / maxCatTotal) * 100)}%`, backgroundColor: "#EF4444" },
-                        ]}
-                      />
-                    </View>
-                    <Text style={[styles.catAmount, { color: "#EF4444" }]}>₹{catTotal.toLocaleString("en-IN")}</Text>
-                  </View>
-                );
-              })}
+              <Text style={styles.sectionTitle}>PENDING COLLECTIONS</Text>
+              <Text style={[styles.expenseSummaryValue, { color: "#F59E0B", marginBottom: 8 }]}>
+                ₹{pendingCollections.toLocaleString("en-IN")}
+              </Text>
+              <Text style={[styles.emptyExpenses, { color: colors.mutedForeground }]}>
+                Outstanding from confirmed bookings not yet fully paid.
+              </Text>
             </View>
           </>
         )}
@@ -571,86 +546,6 @@ export default function FinanceScreen() {
 
         <View style={{ height: 120 }} />
       </ScrollView>
-
-      {/* Expense Modal */}
-      <Modal
-        visible={expenseModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setExpenseModalVisible(false)}
-      >
-        <View style={[styles.modalOverlay, { backgroundColor: "rgba(0,0,0,0.5)" }]}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Add Expense</Text>
-              <Pressable onPress={() => setExpenseModalVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.mutedForeground} />
-              </Pressable>
-            </View>
-            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Record a new expense</Text>
-            <ScrollView style={styles.modalScroll}>
-              <Text style={[styles.inputLabel, { color: colors.foreground }]}>Category</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-                {EXPENSE_CATEGORIES.map((cat) => (
-                  <Pressable
-                    key={cat}
-                    style={[
-                      styles.categoryChip,
-                      {
-                        backgroundColor: newExpense.category === cat ? colors.primary : colors.background,
-                        borderColor: newExpense.category === cat ? colors.primary : colors.border,
-                      },
-                    ]}
-                    onPress={() => setNewExpense({ ...newExpense, category: cat })}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        { color: newExpense.category === cat ? "#fff" : colors.foreground },
-                      ]}
-                    >
-                      {cat}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-              <Text style={[styles.inputLabel, { color: colors.foreground }]}>Amount (₹)</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                value={newExpense.amount}
-                onChangeText={(text) => setNewExpense({ ...newExpense, amount: text })}
-                placeholder="Enter amount"
-                placeholderTextColor={colors.mutedForeground}
-                keyboardType="numeric"
-              />
-              <Text style={[styles.inputLabel, { color: colors.foreground }]}>Description</Text>
-              <TextInput
-                style={[styles.textArea, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                value={newExpense.description}
-                onChangeText={(text) => setNewExpense({ ...newExpense, description: text })}
-                placeholder="Enter description"
-                placeholderTextColor={colors.mutedForeground}
-                multiline
-                numberOfLines={3}
-              />
-            </ScrollView>
-            <View style={styles.modalActions}>
-              <Pressable
-                style={[styles.modalBtn, { backgroundColor: colors.muted }]}
-                onPress={() => setExpenseModalVisible(false)}
-              >
-                <Text style={[styles.modalBtnText, { color: colors.foreground }]}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalBtn, { backgroundColor: colors.primary }]}
-                onPress={addExpense}
-              >
-                <Text style={styles.modalBtnText}>Add Expense</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* P&L Modal */}
       <Modal

@@ -198,7 +198,7 @@ router.get("/bookings/host", requireAuth, async (req, res) => {
     }
 
     const conditions = [sql`${bookingsTable.roomId} = ANY(ARRAY[${sql.raw(roomIds.map(id => `'${id}'`).join(","))}]::uuid[])`];
-    if (statusFilter) conditions.push(eq(bookingsTable.status, statusFilter as "pending" | "confirmed" | "cancelled" | "completed"));
+    if (statusFilter) conditions.push(eq(bookingsTable.status, statusFilter as "pending" | "confirmed" | "checked_in" | "cancelled" | "completed"));
     
     // Date range filters
     if (checkInFrom) conditions.push(sql`${bookingsTable.checkIn} >= ${sql.raw(`'${checkInFrom}'`)}`);
@@ -273,7 +273,7 @@ router.patch("/bookings/:bookingId/checkin", requireAuth, async (req, res) => {
       res.status(403).json({ error: "forbidden", message: "Not your booking" });
       return;
     }
-    const [updated] = await db.update(bookingsTable).set({ checkInTime: new Date() }).where(eq(bookingsTable.id, bookingId)).returning();
+    const [updated] = await db.update(bookingsTable).set({ checkInTime: new Date(), status: "checked_in", updatedAt: new Date() }).where(eq(bookingsTable.id, bookingId)).returning();
     res.json(serializeBooking(updated));
   } catch (err) {
     req.log.error({ err }, "checkIn error");

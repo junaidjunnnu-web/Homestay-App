@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { paymentSettingsTable, usersTable } from "@workspace/db";
+import { paymentSettingsTable, usersTable, propertiesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth";
@@ -20,11 +20,13 @@ router.get("/payment-settings", requireAuth, async (req, res) => {
         advancePaymentPercentage: "50",
         allowDelayedPayment: false,
         delayedPaymentDays: "3",
+        upiQrUrl: null,
       });
       return;
     }
     res.json({
       ...settings,
+      upiQrUrl: settings.upiQrUrl || null,
       createdAt: settings.createdAt.toISOString(),
       updatedAt: settings.updatedAt.toISOString(),
     });
@@ -42,6 +44,7 @@ router.put("/payment-settings", requireAuth, async (req, res) => {
       acceptedPaymentMethods,
       defaultPaymentMethod,
       upiId,
+      upiQrUrl,
       bankDetails,
       googlePayHandle,
       phonepeHandle,
@@ -62,6 +65,7 @@ router.put("/payment-settings", requireAuth, async (req, res) => {
           acceptedPaymentMethods,
           defaultPaymentMethod,
           upiId,
+          upiQrUrl,
           bankDetails,
           googlePayHandle,
           phonepeHandle,
@@ -75,6 +79,19 @@ router.put("/payment-settings", requireAuth, async (req, res) => {
         })
         .where(eq(paymentSettingsTable.userId, user.id))
         .returning();
+
+      // Sync UPI / bank details to all host properties for guest payment flows
+      const propertyUpdates: Record<string, unknown> = {};
+      if (upiId !== undefined) propertyUpdates.upiId = upiId || null;
+      if (bankDetails !== undefined) {
+        propertyUpdates.bankDetails = bankDetails
+          ? `${bankDetails.bankName || ""}\nA/C: ${bankDetails.accountNumber || ""}\nIFSC: ${bankDetails.ifscCode || ""}\n${bankDetails.beneficiaryName || ""}`.trim()
+          : null;
+      }
+      if (Object.keys(propertyUpdates).length > 0) {
+        await db.update(propertiesTable).set(propertyUpdates).where(eq(propertiesTable.hostId, user.id));
+      }
+
       res.json({
         ...updated,
         createdAt: updated.createdAt.toISOString(),
@@ -88,6 +105,7 @@ router.put("/payment-settings", requireAuth, async (req, res) => {
           acceptedPaymentMethods,
           defaultPaymentMethod,
           upiId,
+          upiQrUrl,
           bankDetails,
           googlePayHandle,
           phonepeHandle,
@@ -99,6 +117,16 @@ router.put("/payment-settings", requireAuth, async (req, res) => {
           delayedPaymentDays,
         })
         .returning();
+
+      const propertyUpdates: Record<string, unknown> = {};
+      if (upiId) propertyUpdates.upiId = upiId;
+      if (bankDetails) {
+        propertyUpdates.bankDetails = `${bankDetails.bankName || ""}\nA/C: ${bankDetails.accountNumber || ""}\nIFSC: ${bankDetails.ifscCode || ""}\n${bankDetails.beneficiaryName || ""}`.trim();
+      }
+      if (Object.keys(propertyUpdates).length > 0) {
+        await db.update(propertiesTable).set(propertyUpdates).where(eq(propertiesTable.hostId, user.id));
+      }
+
       res.status(201).json({
         ...created,
         createdAt: created.createdAt.toISOString(),
@@ -135,6 +163,7 @@ router.get("/payment-settings/property/:propertyId", async (req, res) => {
       defaultPaymentMethod: settings.defaultPaymentMethod,
       paymentTerms: settings.paymentTerms,
       upiId: settings.upiId,
+      upiQrUrl: settings.upiQrUrl || null,
     });
   } catch (err) {
     req.log.error({ err }, "getPropertyPaymentSettings error");

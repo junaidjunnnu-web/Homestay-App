@@ -11,12 +11,11 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+import { apiFetch, resolveAssetUrl } from "@/utils/api";
+import { uploadImage } from "@/utils/uploadImage";
 
 const RATING_CATEGORIES = [
   { key: "cleanliness", label: "Cleanliness", icon: "sparkles" },
@@ -49,13 +48,9 @@ export default function ReviewModal({ visible, onClose, property, onSuccess }: R
 
   const submitReviewMutation = useMutation({
     mutationFn: async () => {
-      const token = await AsyncStorage.getItem("homestay_token");
-      const response = await fetch(`${API_BASE}/properties/${property.id}/reviews`, {
+      const response = await apiFetch(`/properties/${property.id}/reviews`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cleanlinessRating: ratings.cleanliness,
           locationRating: ratings.location,
@@ -86,6 +81,7 @@ export default function ReviewModal({ visible, onClose, property, onSuccess }: R
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsMultipleSelection: true,
+        allowsEditing: false,
         quality: 0.8,
         selectionLimit: 5 - photos.length,
       });
@@ -100,32 +96,11 @@ export default function ReviewModal({ visible, onClose, property, onSuccess }: R
 
   const uploadPhotos = async (uris: string[]) => {
     setUploading(true);
-    const baseUrl = process.env.EXPO_PUBLIC_API_URL
-      ? process.env.EXPO_PUBLIC_API_URL.replace("/api", "")
-      : "https://homestay-booking--junaid001.replit.app";
     const uploadedUrls: string[] = [];
 
     try {
       for (const uri of uris) {
-        const formData = new FormData();
-        formData.append("file", {
-          uri,
-          type: "image/jpeg",
-          name: `photo_${Date.now()}.jpg`,
-        } as any);
-
-        const response = await fetch(`${baseUrl}/api/upload`, {
-          method: "POST",
-          headers: { "Content-Type": "multipart/form-data" },
-          body: formData,
-        });
-
-        if (!response.ok) throw new Error("Upload failed");
-        const data = await response.json();
-        let imageUrl = data.url;
-        if (imageUrl && !imageUrl.startsWith("http")) {
-          imageUrl = `${baseUrl}${imageUrl}`;
-        }
+        const imageUrl = await uploadImage(uri);
         uploadedUrls.push(imageUrl);
       }
 

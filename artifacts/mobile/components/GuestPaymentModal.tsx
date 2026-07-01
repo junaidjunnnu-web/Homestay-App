@@ -9,18 +9,20 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useEffect, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
+import * as Clipboard from "expo-clipboard";
 import { useColors } from "@/hooks/useColors";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { apiFetch, resolveAssetUrl } from "@/utils/api";
+import { openWhatsApp } from "@/utils/whatsapp";
 
 interface GuestPaymentModalProps {
   visible: boolean;
   onClose: () => void;
-  booking: any;
+  booking?: any | null;
   onSuccess: () => void;
 }
 
@@ -28,8 +30,23 @@ export default function GuestPaymentModal({ visible, onClose, booking, onSuccess
   const colors = useColors();
   const queryClient = useQueryClient();
   const [selectedMethod, setSelectedMethod] = useState("upi");
+  const [amount, setAmount] = useState("");
   const [transactionId, setTransactionId] = useState("");
   const [proofImage, setProofImage] = useState<string | null>(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
+
+  const { data: propertyPaymentSettings } = useQuery({
+    queryKey: ["propertyPaymentSettings", booking?.property?.id],
+    queryFn: async () => {
+      const response = await apiFetch(`/payment-settings/property/${booking!.property!.id}`);
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: visible && !!booking?.property?.id,
+  });
+
+  const effectiveUpiId = propertyPaymentSettings?.upiId || booking?.property?.upiId;
+  const effectiveQrUrl = propertyPaymentSettings?.upiQrUrl;
 
   const paymentMethods = [
     { id: "upi", label: "UPI", icon: "smartphone", color: "#3B82F6", description: "Pay via PhonePe, GPay, Paytm" },
@@ -39,20 +56,25 @@ export default function GuestPaymentModal({ visible, onClose, booking, onSuccess
 
   const mutation = useMutation({
     mutationFn: async (data: any) => {
-      const token = await fetchToken();
-      const response = await fetch(`${API_BASE}/transactions`, {
+      const response = await apiFetch("/transactions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error("Failed to record payment");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to record payment");
+      }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       Alert.alert("Payment Recorded", "Your payment has been recorded successfully");
+      if (booking?.property?.phone) {
+        openWhatsApp(
+          booking.property.phone,
+          `Hi! I've submitted a payment of ₹${Number(variables.amount).toLocaleString("en-IN")} for booking #${booking.referenceNumber}. Please confirm receipt.`
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ["guestBookings"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       onSuccess();
@@ -64,19 +86,25 @@ export default function GuestPaymentModal({ visible, onClose, booking, onSuccess
     },
   });
 
-  const fetchToken = async () => {
-    try {
-      const token = await AsyncStorage.getItem("homestay_token");
-      return token || "";
-    } catch (error) {
-      console.error("Failed to fetch token", error);
-      return "";
+  const copyUPIId = async () => {
+    if (!effectiveUpiId) {
+      Alert.alert("Error", "UPI ID not available");
+      return;
     }
+    await Clipboard.setStringAsync(effectiveUpiId);
+    Alert.alert("Copied", "UPI ID copied to clipboard");
   };
 
+  useEffect(() => {
+    if (booking) {
+      const remaining = (booking?.totalAmount || 0) - (booking?.paidAmount || 0);
+      setAmount(String(remaining > 0 ? remaining : booking.totalAmount || 0));
+    }
+  }, [booking]);
+
   const generateUPIUrl = () => {
-    if (!booking?.property?.upiId) return null;
-    const upiUrl = `upi://pay?pa=${booking.property.upiId}&pn=${encodeURIComponent(booking.property?.name || '')}&am=${booking.totalAmount || 0}&tn=Booking%20${booking.referenceNumber || ''}&cu=INR`;
+    if (!effectiveUpiId) return null;
+    const upiUrl = `upi://pay?pa=${effectiveUpiId}&pn=${encodeURIComponent(booking.property?.name || '')}&am=${amount || booking.totalAmount || 0}&tn=Booking%20${booking.referenceNumber || ''}&cu=INR`;
     return upiUrl;
   };
 
@@ -89,43 +117,86 @@ export default function GuestPaymentModal({ visible, onClose, booking, onSuccess
     }
   };
 
-  const copyUPIId = () => {
-    if (booking?.property?.upiId) {
-      // Clipboard.setString(booking.property.upiId);
-      Alert.alert("Copied", "UPI ID copied to clipboard");
+  const uploadProof = async (): Promise<string | null> => {
+    if (!proofImage) return null;
+
+    try {
+      setUploadingProof(true);
+      const formData = new FormData();
+      formData.append("file", {
+        uri: proofImage,
+        type: "image/jpeg",
+        name: `payment_proof_${Date.now()}.jpg`,
+      } as any);
+
+      const response = await apiFetch("/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Upload failed");
+      const data = await response.json();
+      return resolveAssetUrl(data.url);
+    } catch (error) {
+      Alert.alert("Error", "Failed to upload proof image.");
+      return null;
+    } finally {
+      setUploadingProof(false);
     }
   };
 
   const pickProof = async () => {
-    // Implement image picker for payment proof
-    Alert.alert("Coming Soon", "Payment proof upload will be available soon");
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setProofImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to pick payment proof image");
+    }
   };
 
-  const handleRecordPayment = () => {
+  const handleRecordPayment = async () => {
     if (!booking?.id) {
       Alert.alert("Error", "Booking information is missing");
       return;
     }
-    if (selectedMethod === "cash") {
-      mutation.mutate({
-        bookingId: booking.id,
-        amount: booking.totalAmount || 0,
-        paymentMethod: "cash",
-        notes: "Cash payment at property",
-      });
-    } else if (selectedMethod === "upi" || selectedMethod === "bank_transfer") {
-      if (!transactionId) {
-        Alert.alert("Required", "Please enter transaction ID/reference number");
+
+    const resolvedAmount = Number(amount || booking.totalAmount || 0);
+    if (!resolvedAmount || isNaN(resolvedAmount)) {
+      Alert.alert("Error", "Please enter a valid amount");
+      return;
+    }
+
+    if (selectedMethod !== "cash" && !transactionId) {
+      Alert.alert("Required", "Please enter transaction ID/reference number");
+      return;
+    }
+
+    let proofUrl = null;
+    if (proofImage) {
+      proofUrl = await uploadProof();
+      if (!proofUrl) {
         return;
       }
-      mutation.mutate({
-        bookingId: booking.id,
-        amount: booking.totalAmount || 0,
-        paymentMethod: selectedMethod,
-        transactionId,
-        notes: selectedMethod === "upi" ? "UPI payment" : "Bank transfer",
-      });
     }
+
+    const payload: any = {
+      bookingId: booking.id,
+      amount: resolvedAmount,
+      paymentMethod: selectedMethod,
+      notes: selectedMethod === "upi" ? "UPI payment" : selectedMethod === "bank_transfer" ? "Bank transfer" : "Cash payment",
+    };
+
+    if (transactionId) payload.transactionId = transactionId;
+    if (proofUrl) payload.proofUrl = proofUrl;
+
+    mutation.mutate(payload);
   };
 
   const resetForm = () => {
@@ -166,6 +237,21 @@ export default function GuestPaymentModal({ visible, onClose, booking, onSuccess
             </View>
           </View>
 
+          <View style={styles.transactionInputSection}>
+            <Text style={styles.inputLabel}>Amount to pay</Text>
+            <View style={[styles.inputContainer, { borderColor: colors.border }]}> 
+              <Feather name="dollar-sign" size={16} color={colors.mutedForeground} />
+              <TextInput
+                style={styles.input}
+                placeholder={`${booking?.totalAmount || 0}`}
+                placeholderTextColor={colors.mutedForeground}
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="numeric"
+              />
+            </View>
+          </View>
+
           <Text style={styles.sectionLabel}>SELECT PAYMENT METHOD</Text>
           {paymentMethods.map((method) => (
             <Pressable
@@ -200,12 +286,12 @@ export default function GuestPaymentModal({ visible, onClose, booking, onSuccess
             <View style={[styles.upiSection, { backgroundColor: colors.background, borderColor: colors.border }]}>
               <Text style={styles.upiSectionTitle}>Pay via UPI</Text>
               
-              {booking?.property?.upiId ? (
+              {effectiveUpiId ? (
                 <>
                   <View style={styles.upiIdContainer}>
                     <Text style={styles.upiIdLabel}>UPI ID</Text>
                     <View style={[styles.upiIdBox, { borderColor: colors.border }]}>
-                      <Text style={styles.upiIdText}>{booking.property.upiId}</Text>
+                      <Text style={styles.upiIdText}>{effectiveUpiId}</Text>
                       <Pressable onPress={copyUPIId} style={[styles.copyButton, { borderColor: colors.primary }]}>
                         <Feather name="copy" size={14} color={colors.primary} />
                       </Pressable>
@@ -218,10 +304,20 @@ export default function GuestPaymentModal({ visible, onClose, booking, onSuccess
                   </Pressable>
 
                   <View style={styles.qrPlaceholder}>
-                    <Ionicons name="qr-code" size={64} color={colors.mutedForeground} />
-                    <Text style={[styles.qrPlaceholderText, { color: colors.mutedForeground }]}>
-                      QR Code will appear here
-                    </Text>
+                    {effectiveQrUrl ? (
+                      <Image
+                        source={{ uri: resolveAssetUrl(effectiveQrUrl) || effectiveQrUrl }}
+                        style={{ width: 180, height: 180 }}
+                        contentFit="contain"
+                      />
+                    ) : (
+                      <>
+                        <Ionicons name="qr-code" size={64} color={colors.mutedForeground} />
+                        <Text style={[styles.qrPlaceholderText, { color: colors.mutedForeground }]}>
+                          Scan UPI ID above or open UPI app
+                        </Text>
+                      </>
+                    )}
                   </View>
                 </>
               ) : (
@@ -243,27 +339,48 @@ export default function GuestPaymentModal({ visible, onClose, booking, onSuccess
           )}
 
           {(selectedMethod === "upi" || selectedMethod === "bank_transfer") && (
-            <View style={styles.transactionInputSection}>
-              <Text style={styles.inputLabel}>Transaction ID / Reference Number</Text>
-              <Text style={[styles.inputHint, { color: colors.mutedForeground }]}>
-                Enter the transaction ID from your payment app
-              </Text>
-              <View style={[styles.inputContainer, { borderColor: colors.border }]}>
-                <Feather name="hash" size={16} color={colors.mutedForeground} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. TXN123456789"
-                  placeholderTextColor={colors.mutedForeground}
-                  value={transactionId}
-                  onChangeText={setTransactionId}
-                  autoCapitalize="characters"
-                />
+            <>
+              <View style={styles.transactionInputSection}>
+                <Text style={styles.inputLabel}>Transaction ID / Reference Number</Text>
+                <Text style={[styles.inputHint, { color: colors.mutedForeground }]}> 
+                  Enter the transaction ID from your payment app
+                </Text>
+                <View style={[styles.inputContainer, { borderColor: colors.border }]}> 
+                  <Feather name="hash" size={16} color={colors.mutedForeground} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. TXN123456789"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={transactionId}
+                    onChangeText={setTransactionId}
+                    autoCapitalize="characters"
+                  />
+                </View>
               </View>
-            </View>
+
+              <View style={styles.proofSection}>
+                <Text style={styles.inputLabel}>Upload payment proof</Text>
+                <Pressable style={[styles.proofButton, { borderColor: colors.primary }]} onPress={pickProof}>
+                  <Text style={[styles.proofButtonText, { color: colors.primary }]}> 
+                    {proofImage ? "Change proof image" : "Select proof image"}
+                  </Text>
+                </Pressable>
+                {proofImage ? (
+                  <Text style={[styles.proofText, { color: colors.mutedForeground }]}>Proof image selected</Text>
+                ) : null}
+                {uploadingProof ? (
+                  <Text style={[styles.proofText, { color: colors.mutedForeground }]}>Uploading proof...</Text>
+                ) : null}
+              </View>
+            </>
           )}
 
           <Pressable
-            style={[styles.recordButton, { backgroundColor: "#E8824A" }, mutation.isPending && { opacity: 0.7 }]}
+            style={[
+              styles.recordButton,
+              { backgroundColor: selectedMethod === "cash" ? "#F59E0B" : "#E8824A" },
+              mutation.isPending && { opacity: 0.7 },
+            ]}
             onPress={handleRecordPayment}
             disabled={mutation.isPending}
           >
@@ -453,6 +570,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     marginBottom: 6,
+  },
+  proofSection: {
+    marginBottom: 16,
+  },
+  proofButton: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    alignItems: "center",
+  },
+  proofButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  proofText: {
+    fontSize: 12,
+    marginTop: 8,
   },
   inputHint: {
     fontSize: 12,

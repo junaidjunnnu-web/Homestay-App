@@ -42,6 +42,7 @@ export default function ImageUpload({
         allowsMultipleSelection: true,
         quality: 0.85,
         selectionLimit: maxImages - images.length,
+        allowsEditing: false,
       });
 
       if (!result.canceled && result.assets) {
@@ -74,6 +75,7 @@ export default function ImageUpload({
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
         quality: 0.85,
+        allowsEditing: false,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -96,18 +98,17 @@ export default function ImageUpload({
 
     try {
       for (let i = 0; i < uris.length; i++) {
+        const fileType = uris[i].toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+        const extension = fileType === "image/png" ? "png" : "jpg";
         const formData = new FormData();
         formData.append("file", {
           uri: uris[i],
-          type: "image/jpeg",
-          name: `image_${Date.now()}_${i}.jpg`,
+          type: fileType,
+          name: `image_${Date.now()}_${i}.${extension}`,
         } as any);
 
         const response = await fetch(`${baseUrl}/api/upload`, {
           method: "POST",
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
           body: formData,
         });
 

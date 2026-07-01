@@ -13,7 +13,7 @@ export const bookingsTable = pgTable("bookings", {
   checkInTime: timestamp("check_in_time", { withTimezone: true }),
   checkOutTime: timestamp("check_out_time", { withTimezone: true }),
   guestCount: integer("guest_count").notNull().default(1),
-  status: text("status", { enum: ["pending", "confirmed", "cancelled", "completed"] }).notNull().default("pending"),
+  status: text("status", { enum: ["pending", "confirmed", "checked_in", "cancelled", "completed"] }).notNull().default("pending"),
   totalAmount: doublePrecision("total_amount").notNull(),
   paymentStatus: text("payment_status", { enum: ["pending", "partial", "paid", "refunded"] }).notNull().default("pending"),
   paymentMethod: text("payment_method", {

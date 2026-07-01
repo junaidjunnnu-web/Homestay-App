@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { messagesTable, usersTable, bookingsTable } from "@workspace/db";
+import { messagesTable, usersTable, bookingsTable, roomsTable, propertiesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth";
@@ -23,12 +23,14 @@ router.get("/messages/booking/:bookingId", requireAuth, async (req, res) => {
       return;
     }
 
-    // Check if user is guest or host
+    // Verify user is guest or host for this booking
     const isGuest = booking.guestId === user.id;
+    let isHost = false;
     if (!isGuest) {
-      // Check if user is host
-      const [room] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId)).limit(1);
-      if (!room) {
+      const [room] = await db.select().from(roomsTable).where(eq(roomsTable.id, booking.roomId)).limit(1);
+      const [property] = room ? await db.select().from(propertiesTable).where(eq(propertiesTable.id, room.propertyId)).limit(1) : [null];
+      isHost = property?.hostId === user.id;
+      if (!isHost) {
         res.status(403).json({ error: "forbidden", message: "Access denied" });
         return;
       }
@@ -80,7 +82,12 @@ router.post("/messages", requireAuth, async (req, res) => {
 
     // Verify user is part of the booking (guest or host)
     const isGuest = booking.guestId === user.id;
-    const isHost = booking.guestId !== user.id; // Simplified check
+    let isHost = false;
+    if (!isGuest) {
+      const [room] = await db.select().from(roomsTable).where(eq(roomsTable.id, booking.roomId)).limit(1);
+      const [property] = room ? await db.select().from(propertiesTable).where(eq(propertiesTable.id, room.propertyId)).limit(1) : [null];
+      isHost = property?.hostId === user.id;
+    }
     
     if (!isGuest && !isHost) {
       res.status(403).json({ error: "forbidden", message: "You are not part of this booking" });

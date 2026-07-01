@@ -11,12 +11,10 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useColors } from "@/hooks/useColors";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api";
+import { apiFetch, resolveAssetUrl } from "@/utils/api";
 
 const REQUEST_TYPES = [
   { key: "special_request", label: "Special Request", icon: "document-text", description: "Dietary needs, early check-in, etc." },
@@ -32,7 +30,7 @@ const PRIORITIES = [
 interface SpecialRequestsModalProps {
   visible: boolean;
   onClose: () => void;
-  booking: any;
+  booking?: any | null;
   onSuccess: () => void;
 }
 
@@ -50,9 +48,9 @@ export default function SpecialRequestsModal({ visible, onClose, booking, onSucc
   const { data: existingRequests, isLoading } = useQuery({
     queryKey: ["specialRequests", booking?.id],
     queryFn: async () => {
-      const token = await AsyncStorage.getItem("homestay_token");
-      const response = await fetch(`${API_BASE}/bookings/${booking.id}/special-requests`, {
-        headers: { Authorization: `Bearer ${token}` },
+      if (!booking?.id) return [];
+      const response = await apiFetch(`/bookings/${booking.id}/special-requests`, {
+        headers: {},
       });
       if (!response.ok) throw new Error("Failed to fetch requests");
       return response.json();
@@ -62,13 +60,12 @@ export default function SpecialRequestsModal({ visible, onClose, booking, onSucc
 
   const createRequestMutation = useMutation({
     mutationFn: async () => {
-      const token = await AsyncStorage.getItem("homestay_token");
-      const response = await fetch(`${API_BASE}/bookings/${booking.id}/special-requests`, {
+      if (!booking?.id) {
+        throw new Error("Booking information is missing");
+      }
+      const response = await apiFetch(`/bookings/${booking.id}/special-requests`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           requestType,
           title: title.trim(),
@@ -85,7 +82,9 @@ export default function SpecialRequestsModal({ visible, onClose, booking, onSucc
     },
     onSuccess: () => {
       Alert.alert("Success", "Your request has been submitted!");
-      queryClient.invalidateQueries({ queryKey: ["specialRequests", booking.id] });
+      if (booking?.id) {
+        queryClient.invalidateQueries({ queryKey: ["specialRequests", booking.id] });
+      }
       resetForm();
       onSuccess();
     },
@@ -99,6 +98,7 @@ export default function SpecialRequestsModal({ visible, onClose, booking, onSucc
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsMultipleSelection: true,
+        allowsEditing: false,
         quality: 0.8,
         selectionLimit: 5 - proofPhotos.length,
       });
@@ -113,9 +113,6 @@ export default function SpecialRequestsModal({ visible, onClose, booking, onSucc
 
   const uploadPhotos = async (uris: string[]) => {
     setUploading(true);
-    const baseUrl = process.env.EXPO_PUBLIC_API_URL
-      ? process.env.EXPO_PUBLIC_API_URL.replace("/api", "")
-      : "https://homestay-booking--junaid001.replit.app";
     const uploadedUrls: string[] = [];
 
     try {
@@ -127,19 +124,14 @@ export default function SpecialRequestsModal({ visible, onClose, booking, onSucc
           name: `photo_${Date.now()}.jpg`,
         } as any);
 
-        const response = await fetch(`${baseUrl}/api/upload`, {
+        const response = await apiFetch("/upload", {
           method: "POST",
-          headers: { "Content-Type": "multipart/form-data" },
           body: formData,
         });
 
         if (!response.ok) throw new Error("Upload failed");
         const data = await response.json();
-        let imageUrl = data.url;
-        if (imageUrl && !imageUrl.startsWith("http")) {
-          imageUrl = `${baseUrl}${imageUrl}`;
-        }
-        uploadedUrls.push(imageUrl);
+        uploadedUrls.push(resolveAssetUrl(data.url) || data.url);
       }
 
       setProofPhotos([...proofPhotos, ...uploadedUrls]);
