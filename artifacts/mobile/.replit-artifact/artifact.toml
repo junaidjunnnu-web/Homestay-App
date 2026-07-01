@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 ensurePreviewReachable = "/status"
-name = "expo"
+name = "web"
 paths = [ "/" ]
 localPort = 18115
 
@@ -22,6 +22,10 @@ run = "pnpm --filter @workspace/mobile run dev"
 build = [ "pnpm", "--filter", "@workspace/mobile", "run", "build" ]
 run = [ "pnpm", "--filter", "@workspace/mobile", "run", "serve" ]
 
-[services.env]
+[services.production.build.env]
+NODE_ENV = "production"
+
+[services.production.run.env]
 PORT = "18115"
 BASE_PATH = "/"
+NODE_ENV = "production"
