@@ -67,6 +67,17 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
 
     if (response.body) {
       const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
+      nodeStream.on("error", (streamErr) => {
+        req.log.error({ err: streamErr }, "Stream error serving public object");
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to serve public object" });
+        } else {
+          res.end();
+        }
+      });
+      res.on("close", () => {
+        nodeStream.destroy();
+      });
       nodeStream.pipe(res);
     } else {
       res.end();
@@ -113,6 +124,17 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
 
     if (response.body) {
       const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
+      nodeStream.on("error", (streamErr) => {
+        req.log.error({ err: streamErr }, "Stream error serving object");
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to serve object" });
+        } else {
+          res.end();
+        }
+      });
+      res.on("close", () => {
+        nodeStream.destroy();
+      });
       nodeStream.pipe(res);
     } else {
       res.end();
