@@ -11,11 +11,12 @@ import {
   Modal,
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, Redirect } from "expo-router";
 import React, { useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGetProperties, getFullImageUrl } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -33,6 +34,8 @@ export default function ExploreScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
+  const isHost = user?.role === "host";
   const [search, setSearch] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -40,9 +43,14 @@ export default function ExploreScreen() {
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
 
-  const { data, isLoading, refetch, isRefetching } = useGetProperties({
-    city: selectedCity || undefined,
-  });
+  const { data, isLoading, refetch, isRefetching } = useGetProperties(
+    { city: selectedCity || undefined },
+    { query: { enabled: !isHost } as any },
+  );
+
+  if (isHost) {
+    return <Redirect href="/dashboard" />;
+  }
 
   const properties = data?.properties || [];
 

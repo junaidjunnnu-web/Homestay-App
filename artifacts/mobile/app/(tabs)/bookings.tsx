@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, Suspense } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   useGetGuestBookings,
@@ -23,14 +23,15 @@ import {
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
-import PaymentModal from "@/components/PaymentModal";
-import GuestPaymentModal from "@/components/GuestPaymentModal";
-import ChatModal from "@/components/ChatModal";
-import SpecialRequestsModal from "@/components/SpecialRequestsModal";
-import UPIQRModal from "@/components/UPIQRModal";
-import TravelGuideModal from "@/components/TravelGuideModal";
 import { apiFetch } from "@/utils/api";
 import { openWhatsApp, normalizePhone } from "@/utils/whatsapp";
+
+const PaymentModal = React.lazy(() => import("@/components/PaymentModal"));
+const GuestPaymentModal = React.lazy(() => import("@/components/GuestPaymentModal"));
+const ChatModal = React.lazy(() => import("@/components/ChatModal"));
+const SpecialRequestsModal = React.lazy(() => import("@/components/SpecialRequestsModal"));
+const UPIQRModal = React.lazy(() => import("@/components/UPIQRModal"));
+const TravelGuideModal = React.lazy(() => import("@/components/TravelGuideModal"));
 
 const FILTERS = ["All", "Pending", "Confirmed", "Completed", "Cancelled"];
 const PAYMENT_STATUSES = ["pending", "paid", "partial"] as const;
@@ -782,50 +783,74 @@ Thank you for your booking!
         </View>
       </Modal>
 
-      <PaymentModal
-        visible={paymentModalVisible}
-        onClose={() => setPaymentModalVisible(false)}
-        booking={selectedBooking}
-        onSuccess={() => refetch()}
-      />
+      {paymentModalVisible && (
+        <Suspense fallback={null}>
+          <PaymentModal
+            visible={paymentModalVisible}
+            onClose={() => setPaymentModalVisible(false)}
+            booking={selectedBooking}
+            onSuccess={() => refetch()}
+          />
+        </Suspense>
+      )}
 
-      <GuestPaymentModal
-        visible={guestPaymentModalVisible}
-        onClose={() => setGuestPaymentModalVisible(false)}
-        booking={selectedBooking}
-        onSuccess={() => refetch()}
-      />
+      {guestPaymentModalVisible && (
+        <Suspense fallback={null}>
+          <GuestPaymentModal
+            visible={guestPaymentModalVisible}
+            onClose={() => setGuestPaymentModalVisible(false)}
+            booking={selectedBooking}
+            onSuccess={() => refetch()}
+          />
+        </Suspense>
+      )}
 
-      <ChatModal
-        visible={chatModalVisible}
-        onClose={() => setChatModalVisible(false)}
-        booking={selectedBooking}
-        currentUser={user}
-      />
+      {chatModalVisible && (
+        <Suspense fallback={null}>
+          <ChatModal
+            visible={chatModalVisible}
+            onClose={() => setChatModalVisible(false)}
+            booking={selectedBooking}
+            currentUser={user}
+          />
+        </Suspense>
+      )}
 
-      <SpecialRequestsModal
-        visible={specialRequestsModalVisible}
-        onClose={() => setSpecialRequestsModalVisible(false)}
-        booking={selectedBooking}
-        onSuccess={() => refetch()}
-      />
+      {specialRequestsModalVisible && (
+        <Suspense fallback={null}>
+          <SpecialRequestsModal
+            visible={specialRequestsModalVisible}
+            onClose={() => setSpecialRequestsModalVisible(false)}
+            booking={selectedBooking}
+            onSuccess={() => refetch()}
+          />
+        </Suspense>
+      )}
 
-      <UPIQRModal
-        visible={upiQRModalVisible}
-        onClose={() => setUpiQRModalVisible(false)}
-        upiId={selectedBooking?.property?.upiId || ""}
-        amount={selectedBooking?.totalAmount || 0}
-        bookingRef={selectedBooking?.referenceNumber || ""}
-        property={selectedBooking?.property?.name}
-      />
+      {upiQRModalVisible && (
+        <Suspense fallback={null}>
+          <UPIQRModal
+            visible={upiQRModalVisible}
+            onClose={() => setUpiQRModalVisible(false)}
+            upiId={selectedBooking?.property?.upiId || ""}
+            amount={selectedBooking?.totalAmount || 0}
+            bookingRef={selectedBooking?.referenceNumber || ""}
+            property={selectedBooking?.property?.name}
+          />
+        </Suspense>
+      )}
 
-      <TravelGuideModal
-        visible={travelGuideModalVisible}
-        onClose={() => setTravelGuideModalVisible(false)}
-        property={selectedBooking?.property}
-        guestMobile={isHost ? selectedBooking?.guestMobile : undefined}
-        guestName={isHost ? selectedBooking?.guestName : undefined}
-      />
+      {travelGuideModalVisible && (
+        <Suspense fallback={null}>
+          <TravelGuideModal
+            visible={travelGuideModalVisible}
+            onClose={() => setTravelGuideModalVisible(false)}
+            property={selectedBooking?.property}
+            guestMobile={isHost ? selectedBooking?.guestMobile : undefined}
+            guestName={isHost ? selectedBooking?.guestName : undefined}
+          />
+        </Suspense>
+      )}
     </View>
   );
 }
