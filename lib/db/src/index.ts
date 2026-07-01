@@ -10,7 +10,23 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const connectionString = process.env.DATABASE_URL;
+const isNeon =
+  connectionString.includes("neon.tech") ||
+  connectionString.includes("neon.database");
+
+export const pool = new Pool({
+  connectionString,
+  max: Number(process.env.DB_POOL_MAX ?? 10),
+  idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS ?? 30_000),
+  connectionTimeoutMillis: Number(process.env.DB_CONNECT_TIMEOUT_MS ?? 10_000),
+  ...(isNeon ? { ssl: { rejectUnauthorized: false } } : {}),
+});
+
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle PostgreSQL client:", err);
+});
+
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -15,8 +16,12 @@ try {
 const router = Router();
 
 const uploadDir = path.resolve(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (err) {
+  console.warn("Could not create uploads directory:", err);
 }
 
 const storage = multer.diskStorage({
@@ -41,8 +46,22 @@ const upload = multer({
   },
 });
 
+function handleMulterUpload(
+  uploadMiddleware: ReturnType<typeof upload.single> | ReturnType<typeof upload.array>,
+) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    uploadMiddleware(req, res, (err) => {
+      if (err) {
+        next(err);
+        return;
+      }
+      next();
+    });
+  };
+}
+
 // Single image upload with compression
-router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
+router.post("/upload", requireAuth, handleMulterUpload(upload.single("file")), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "validation", message: "No file uploaded" });
     return;
@@ -85,7 +104,7 @@ router.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
 });
 
 // Multiple images upload
-router.post("/upload-multiple", requireAuth, upload.array("files", 10), async (req, res) => {
+router.post("/upload-multiple", requireAuth, handleMulterUpload(upload.array("files", 10)), async (req, res) => {
   if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
     res.status(400).json({ error: "validation", message: "No files uploaded" });
     return;
